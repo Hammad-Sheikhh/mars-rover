@@ -1,0 +1,12 @@
+# Arduino IDE junk
+*.elf
+*.bin
+*.hex
+*.o
+*.d
+build/
+libraries/
+
+# OS junk
+.DS_Store
+Thumbs.db
