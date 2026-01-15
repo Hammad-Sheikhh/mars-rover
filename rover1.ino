@@ -269,18 +269,14 @@ void handleRoot() {
   </div>
 <script>
   let auto = false;
-  let holdTimer = null;
   function send(path){ fetch(path).catch(e=>console.log('err',e)); }
   function startCmd(action){
     if(auto) return;
     send('/cmd?act='+action);
-    if(holdTimer) clearTimeout(holdTimer);
-    holdTimer = setTimeout(stopCmd,1000);
   }
   function stopCmd(){
     if(auto) return;
     send('/cmd?act=stop');
-    if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
   }
   function updateSpeed(v){
     document.getElementById('speedVal').innerText = v;
