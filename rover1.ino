@@ -22,10 +22,12 @@
 // ---------- WiFi Station (for internet) ---------- // NEW
 const char* wifiSSID = "REDACTED_SSID";      // Replace with your WiFi name
 const char* wifiPass = "REDACTED_WIFI_PASS"; // Replace with your WiFi password
-const String n8nWebhookUrl = "https://example.app.n8n.cloud/webhook-test/mars-rover";  // Replace with your n8n webhook URL (from the Webhook node)
-// ---------- Data Send Interval ---------- // NEW
+// ---------- Supabase Configuration ----------
+const String supabaseUrl = "https://your-project-ref.supabase.co";
+const String supabaseKey = "REDACTED_SUPABASE_ANON_KEY";
+// ---------- Data Send Interval ----------
 unsigned long lastSendTime = 0;
-const unsigned long sendIntervalMs = 10000;  // Send every 10 seconds
+const unsigned long sendIntervalMs = 5000;  // Send every 5 seconds
 // ---------- WiFi AP ----------
 const char* apSSID = "ESP32-Car-AP";
 const char* apPass = "REDACTED_AP_PASS";
@@ -82,7 +84,7 @@ void backward(int speed);
 void leftTurn(int speed);
 void rightTurn(int speed);
 void stopMotors();
-void sendDataToN8n();  // NEW: Function to send sensor data
+void sendDataToSupabase();  // Function to send sensor data to Supabase
 void setup() {
   Serial.begin(115200);
   delay(100);
@@ -191,10 +193,10 @@ void loop() {
     }
     delay(80);
   }
-  // NEW: Send data to n8n periodically if connected
+  // Send data to Supabase periodically if connected
   if (WiFi.status() == WL_CONNECTED && millis() - lastSendTime >= sendIntervalMs) {
     lastSendTime = millis();
-    sendDataToN8n();
+    sendDataToSupabase();
   }
 }
 // ---------------- Web UI handlers ----------------
@@ -463,9 +465,9 @@ long getDistance() {
   if (b <= 0) return -1;
   return b;
 }
-// NEW: Function to collect sensors and send to n8n
-void sendDataToN8n() {
-  // Reuse sensor reading logic from handleSensorsData()
+// Function to collect sensors and send to Supabase
+void sendDataToSupabase() {
+  // Read sensor values
   int ldrState = digitalRead(LDR_PIN);
   float pressureHpa = NAN;
   float relAltitudeCm = NAN;
@@ -476,27 +478,38 @@ void sendDataToN8n() {
   }
   float temperature = dht.readTemperature();
   float humidity = dht.readHumidity();
-  // Build JSON payload
+  
+  // Build JSON payload for Supabase (matching table columns)
   String payload = "{";
-  payload += "\"ldrState\":" + String(ldrState);
+  payload += "\"temperature\":" + (isnan(temperature) ? "null" : String(temperature, 1));
+  payload += ",\"humidity\":" + (isnan(humidity) ? "null" : String(humidity, 0));
+  payload += ",\"ldr_state\":\"" + String(ldrState == 1 ? "Night" : "Day") + "\"";
   payload += ",\"pressure\":" + (bmpFound ? String(pressureHpa, 2) : "null");
   payload += ",\"altitude\":" + (bmpFound ? String(relAltitudeCm, 2) : "null");
-  payload += ",\"temperature\":" + (isnan(temperature) ? "null" : String(temperature, 1));
-  payload += ",\"humidity\":" + (isnan(humidity) ? "null" : String(humidity, 0));
-  payload += ",\"autonomous\":" + String(autonomousEnabled ? 1 : 0);
   payload += "}";
-  // Send POST
+  
+  // Supabase REST API endpoint for sensor_readings table
+  String url = supabaseUrl + "/rest/v1/sensor_readings";
+  
+  // Send POST request
   HTTPClient http;
-  http.begin(n8nWebhookUrl);
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", supabaseKey);
+  http.addHeader("Authorization", "Bearer " + supabaseKey);
+  http.addHeader("Prefer", "return=minimal");
+  
   int httpResponseCode = http.POST(payload);
-  // Debug
-  if (httpResponseCode > 0) {
-    Serial.printf("Data sent to n8n: HTTP %d\n", httpResponseCode);
+  
+  // Debug output
+  if (httpResponseCode == 201) {
+    Serial.println("Data sent to Supabase successfully!");
+  } else if (httpResponseCode > 0) {
+    Serial.printf("Supabase response: HTTP %d\n", httpResponseCode);
     String response = http.getString();
-    Serial.println("Response: " + response);  // Should match your n8n response node
+    Serial.println("Response: " + response);
   } else {
-    Serial.printf("Error sending to n8n: %d\n", httpResponseCode);
+    Serial.printf("Error sending to Supabase: %d\n", httpResponseCode);
   }
   http.end();
 }
