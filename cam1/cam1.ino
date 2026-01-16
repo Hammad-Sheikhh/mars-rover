@@ -3,6 +3,7 @@
 #include <esp_timer.h>
 #include <esp_http_server.h>
 #include <HTTPClient.h>
+#include <time.h>
 
 /* ================= WIFI ================= */
 const char* ssid_sta = "REDACTED_SSID";
@@ -11,9 +12,13 @@ const char* password_sta = "REDACTED_WIFI_PASS";
 const char* ssid_ap = "ESP32_CAM_MARS";
 const char* password_ap = "REDACTED_AP_PASS";
 
-/* ================= N8N ================= */
-const char* webhook_url =
-"https://example.app.n8n.cloud/webhook-test/cam1";
+/* ================= SUPABASE CONFIG ================= */
+// Your Supabase project URL (same as rover1.ino)
+const String supabaseUrl = "https://your-project-ref.supabase.co";
+// Your Supabase anon key (same as rover1.ino)
+const String supabaseKey = "REDACTED_SUPABASE_ANON_KEY";
+// Storage bucket name - CREATE THIS IN SUPABASE DASHBOARD FIRST!
+const String bucketName = "rover-images";
 
 /* ================= HARDWARE ================= */
 #define LED_PIN 4
@@ -45,6 +50,8 @@ volatile bool capture_flag = false;
 
 uint8_t* jpg_buffer = NULL;
 size_t jpg_buffer_len = 0;
+
+unsigned long imageCounter = 0;
 
 /* ================= CLEAN MOBILE UI ================= */
 const char* html_page = R"rawliteral(
@@ -110,7 +117,7 @@ img {
   <img id="cam" src="/capture">
   <div class="status">
     <div>LINK: ACTIVE</div>
-    <div>UPDATE: 3 SEC</div>
+    <div>UPLOAD: SUPABASE</div>
   </div>
 </div>
 
@@ -137,7 +144,7 @@ esp_err_t index_handler(httpd_req_t *req) {
 
 esp_err_t capture_handler(httpd_req_t *req) {
     digitalWrite(LED_PIN, HIGH);
-    delay(40); // allow exposure to adjust
+    delay(40);
 
     camera_fb_t * fb = esp_camera_fb_get();
     digitalWrite(LED_PIN, LOW);
@@ -171,8 +178,8 @@ void timer_cb(void *arg) {
     capture_flag = true;
 }
 
-/* ================= WEBHOOK IMAGE ================= */
-void capture_for_webhook() {
+/* ================= CAPTURE IMAGE ================= */
+void capture_for_upload() {
     digitalWrite(LED_PIN, HIGH);
     delay(40);
 
@@ -188,12 +195,81 @@ void capture_for_webhook() {
     esp_camera_fb_return(fb);
 }
 
-void send_to_n8n() {
-    if (WiFi.status() != WL_CONNECTED) return;
+/* ================= UPLOAD TO SUPABASE STORAGE ================= */
+void upload_to_supabase() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected, skipping upload");
+        return;
+    }
+    if (!jpg_buffer || jpg_buffer_len == 0) {
+        Serial.println("No image to upload");
+        return;
+    }
+
+    // Generate unique filename using millis and counter
+    imageCounter++;
+    String filename = "capture_" + String(millis()) + "_" + String(imageCounter) + ".jpg";
+    
+    // Supabase Storage upload URL
+    // Format: {supabase_url}/storage/v1/object/{bucket_name}/{file_path}
+    String uploadUrl = supabaseUrl + "/storage/v1/object/" + bucketName + "/" + filename;
+    
+    Serial.println("Uploading to: " + uploadUrl);
+    
     HTTPClient http;
-    http.begin(webhook_url);
+    http.begin(uploadUrl);
+    
+    // Required headers for Supabase Storage
     http.addHeader("Content-Type", "image/jpeg");
-    http.POST(jpg_buffer, jpg_buffer_len);
+    http.addHeader("apikey", supabaseKey);
+    http.addHeader("Authorization", "Bearer " + supabaseKey);
+    
+    // POST the image binary data
+    int httpResponseCode = http.POST(jpg_buffer, jpg_buffer_len);
+    
+    if (httpResponseCode == 200 || httpResponseCode == 201) {
+        Serial.println("✓ Image uploaded to Supabase Storage!");
+        
+        // Construct the public URL for the image
+        String publicUrl = supabaseUrl + "/storage/v1/object/public/" + bucketName + "/" + filename;
+        Serial.println("Public URL: " + publicUrl);
+        
+        // Optional: Also save the URL to database table
+        save_image_url_to_db(publicUrl);
+        
+    } else {
+        Serial.printf("✗ Upload failed. HTTP code: %d\n", httpResponseCode);
+        String response = http.getString();
+        Serial.println("Response: " + response);
+    }
+    
+    http.end();
+}
+
+/* ================= SAVE IMAGE URL TO DATABASE (Optional) ================= */
+void save_image_url_to_db(String imageUrl) {
+    HTTPClient http;
+    
+    // Insert into a 'camera_captures' table (you need to create this table in Supabase)
+    String dbUrl = supabaseUrl + "/rest/v1/camera_captures";
+    
+    http.begin(dbUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", supabaseKey);
+    http.addHeader("Authorization", "Bearer " + supabaseKey);
+    http.addHeader("Prefer", "return=minimal");
+    
+    // JSON payload with image URL
+    String payload = "{\"image_url\":\"" + imageUrl + "\"}";
+    
+    int httpResponseCode = http.POST(payload);
+    
+    if (httpResponseCode == 201) {
+        Serial.println("✓ Image URL saved to database!");
+    } else {
+        Serial.printf("Database insert failed: %d\n", httpResponseCode);
+    }
+    
     http.end();
 }
 
@@ -229,7 +305,6 @@ void setup() {
 
     esp_camera_init(&config);
 
-    /* 🔥 IMAGE TUNING (IMPORTANT) */
     sensor_t * s = esp_camera_sensor_get();
     s->set_brightness(s, 1);
     s->set_contrast(s, 1);
@@ -241,22 +316,39 @@ void setup() {
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(ssid_ap, password_ap);
     WiFi.begin(ssid_sta, password_sta);
+    
+    Serial.print("Connecting to WiFi");
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\nWiFi connected! IP: " + WiFi.localIP().toString());
+    } else {
+        Serial.println("\nWiFi connection failed");
+    }
 
     start_web_server();
+    Serial.println("Web server started on AP: " + String(ssid_ap));
 
     esp_timer_create_args_t timer_args = {
         .callback = &timer_cb,
         .name = "mars_timer"
     };
     esp_timer_create(&timer_args, &capture_timer);
-    esp_timer_start_periodic(capture_timer, 3000000);
+    esp_timer_start_periodic(capture_timer, 5000000); // 5 seconds
+    
+    Serial.println("=== Mars Rover Camera Ready ===");
+    Serial.println("Images will upload to Supabase Storage every 5 seconds");
 }
 
 /* ================= LOOP ================= */
 void loop() {
     if (capture_flag) {
-        capture_for_webhook();
-        send_to_n8n();
+        capture_for_upload();
+        upload_to_supabase();  // Upload to Supabase Storage
         capture_flag = false;
     }
     delay(10);
