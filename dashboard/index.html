@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth Station Scientist | Mars Rover</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <div class="logo">🚀 EARTH STATION</div>
+            <h1>Chief Scientist Dashboard</h1>
+            <div class="status-indicator" id="status-ind">SYSTEM ONLINE</div>
+        </header>
+
+        <main>
+            <div class="controls">
+                <button id="generate-btn" onclick="generateReport()">
+                    <span id="btn-text">GENERATE MISSION REPORT</span>
+                    <div id="loader" class="loader" style="display:none"></div>
+                </button>
+            </div>
+
+            <div class="report-container">
+                <div id="report-output" class="markdown-body">
+                    <p class="placeholder">Waiting for manual trigger... Click "Generate" to analyze latest telemetry
+                        and visual data.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- CONFIGURATION -->
+    <script>
+        // REPLACE THIS WITH YOUR PRODUCTION N8N WEBHOOK URL
+        const WEBHOOK_URL = 'https://example.app.n8n.cloud/webhook-test/mission-report'; 
+    </script>
+
+    <script>
+        async function generateReport() {
+            const btn = document.getElementById('generate-btn');
+            const btnText = document.getElementById('btn-text');
+            const loader = document.getElementById('loader');
+            const output = document.getElementById('report-output');
+            const status = document.getElementById('status-ind');
+
+            // Set Loading State
+            btn.disabled = true;
+            btnText.innerText = "ANALYZING...";
+            loader.style.display = "block";
+            status.innerText = "AWAITING DATA...";
+            status.style.color = "#ffd700";
+
+            output.innerHTML = '<p class="blink">Connecting to Mars Rover... extracting telemetry... processing visual feed...</p>';
+
+            try {
+                // Call n8n Webhook
+                console.log("Sending request to:", WEBHOOK_URL);
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timestamp: Date.now() })
+                });
+
+                console.log("Response Status:", response.status);
+
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                // Get Markdown Text
+                const markdownText = await response.text();
+                console.log("Response Text Length:", markdownText.length);
+                console.log("Response Text Preview:", markdownText.substring(0, 100));
+
+                if (!markdownText || markdownText.trim() === "") {
+                    throw new Error("Received EMPTY response from n8n. Check n8n Workflow Output.");
+                }
+
+                // Render Markdown to HTML using marked.js
+                output.innerHTML = marked.parse(markdownText);
+
+                status.innerText = "DATA RECEIVED";
+                status.style.color = "#00ff00";
+
+            } catch (error) {
+                console.error(error);
+                output.innerHTML = `<p style="color:red">ERROR: Failed to contact analyst agent.<br>${error.message}</p>`;
+                status.innerText = "CONNECTION ERROR";
+                status.style.color = "#ff0000";
+            } finally {
+                // Reset Button
+                btn.disabled = false;
+                btnText.innerText = "GENERATE NEW REPORT";
+                loader.style.display = "none";
+            }
+        }
+    </script>
+</body>
+
+</html>
