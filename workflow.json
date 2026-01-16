@@ -1,0 +1,161 @@
+{
+    "name": "Mars Rover Report Generator",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "cam1",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                -300,
+                100
+            ],
+            "id": "webhook-node",
+            "name": "Webhook",
+            "webhookId": "9e23f690-58dc-4c57-b903-27309dca530d"
+        },
+        {
+            "parameters": {
+                "operation": "getAll",
+                "tableId": "sensor_readings",
+                "returnAll": false,
+                "limit": 5,
+                "options": {
+                    "order": {
+                        "values": [
+                            {
+                                "column": "created_at",
+                                "direction": "desc"
+                            }
+                        ]
+                    }
+                }
+            },
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                -50,
+                100
+            ],
+            "id": "supabase-node",
+            "name": "Get Latest 5 Readings",
+            "credentials": {
+                "supabaseApi": {
+                    "id": "oShnkSi9lLUwjfn3",
+                    "name": "Supabase account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "## SENSOR DATA (Latest 5 Readings):\n{{ JSON.stringify($json, null, 2) }}\n\n## IMAGE:\nAnalyze the image provided in the webhook request.\n\n## TASK:\nGenerate a comprehensive Mars Rover status report based on both the sensor data above and the image.",
+                "options": {
+                    "systemMessage": "You are a Mars Rover Scientific Analyst.\n\nGenerate a report in this EXACT format:\n\n# Mars Rover Status Report\n\n## Visual Analysis\n[Describe terrain, obstacles, lighting from the image]\n\n## Sensor Readings Summary\n| Time | Temp (°C) | Humidity (%) | Pressure (hPa) | Altitude (cm) | Light |\n|------|-----------|--------------|----------------|---------------|-------|\n[Create table from the sensor data provided]\n\n## Telemetry Analysis\n- Temperature trend: [rising/falling/stable based on 5 readings]\n- Pressure trend: [rising/falling/stable]\n- Light conditions: [Does ldr_state match image brightness?]\n\n## Conclusion\n[Is environment safe? Should rover proceed?]"
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 3.1,
+            "position": [
+                200,
+                100
+            ],
+            "id": "ai-agent-node",
+            "name": "AI Agent"
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-flash",
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                100,
+                300
+            ],
+            "id": "gemini-node",
+            "name": "Gemini 1.5 Flash",
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "VXxDRwrcaNJWR3Od",
+                    "name": "Google Gemini(PaLM) Api account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "rover-session",
+                "contextWindowLength": 10
+            },
+            "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+            "typeVersion": 1.3,
+            "position": [
+                300,
+                300
+            ],
+            "id": "memory-node",
+            "name": "Memory"
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Get Latest 5 Readings",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Latest 5 Readings": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini 1.5 Flash": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "meta": {
+        "templateCredsSetupCompleted": true
+    },
+    "tags": []
+}
