@@ -1,91 +1,57 @@
 # ESP32 Mars Rover
 
-An advanced ESP32-based rover featuring dual-mode WiFi connectivity (AP for control, Station for telemetry), autonomous obstacle avoidance, and real-time environmental monitoring.
+An advanced ESP32-based rover featuring dual-mode WiFi connectivity, autonomous obstacle avoidance, and real-time cloud telemetry via **Supabase**.
+
+![Supabase](https://img.shields.io/badge/Supabase-Integrated-green?style=flat-square&logo=supabase)
+![ESP32](https://img.shields.io/badge/ESP32-Powered-blue?style=flat-square&logo=espressif)
 
 ## Key Features
 
 *   **Dual WiFi Modes:**
-    *   **Access Point (AP):** Creates a local WiFi network ("ESP32-Car-AP") hosting a web server for low-latency manual control via a mobile-friendly web interface.
-    *   **Station (STA):** Connects to an existing WiFi network to log sensor data to the cloud.
+    *   **Access Point (AP):** Creates a local network (`ESP32_CAM_MARS`) for low-latency manual control via phone.
+    *   **Station (STA):** Connects to home WiFi to upload data and images to the cloud.
+*   **Cloud Integration (Supabase):**
+    *   **Telemetry:** Sensors (Temp, Humidity, Pressure, Altitude, Light) logged to `sensor_readings` database table.
+    *   **Vision:** Periodic images captured and uploaded to `rover-images` Storage bucket.
+*   **AI Analysis Workflow:**
+    *   Includes an n8n workflow (`workflows/mars_rover_report.json`) that combines the latest sensor readings and images to generate a scientific status report using Generative AI.
 *   **Control Modes:**
-    *   **Manual:** Web-based joystick/button control for movement (Forward, Backward, Left, Right, Stop) and speed adjustment.
-    *   **Autonomous:** Intelligent obstacle avoidance using Ultrasonic and IR sensors to navigate without human intervention.
-*   **Telemetry:** Real-time streaming of data:
-    *   Temperature & Humidity (DHT11)
-    *   Pressure & Relative Altitude (BMP280)
-    *   Light Levels (LDR)
-*   **Cloud Integration:** Periodically sends sensor data to an n8n webhook (or any compatible API) for logging and analysis.
+    *   **Manual:** Web-based joystick control.
+    *   **Autonomous:** Obstacle avoidance using Ultrasonic and IR sensors.
 
 ## Hardware Requirements
 
-*   **Microcontroller:** ESP32 Development Board
-*   **Motor Driver:** L298N or similar
-*   **Motors:** 2x or 4x DC Motors + Robot Chassis
-*   **Distance Sensor:** HC-SR04 Ultrasonic Sensor
-*   **Obstacle Sensors:** 2x IR Sensors (Left/Right)
-*   **Environmental Sensors:**
-    *   BMP280 (Pressure/Altitude)
-    *   DHT11 (Temperature/Humidity)
-    *   LDR Sensor Module (Light)
-*   **Power Supply:** Suitable battery pack (e.g., 2x 18650 Li-ion batteries)
+*   **Microcontroller:** ESP32 Development Board (Main Rover)
+*   **Camera Module:** ESP32-CAM (AI-Thinker Model)
+*   **Motor Driver:** L298N
+*   **Sensors:** HC-SR04 (Ultrasonic), 2x IR Sensors, BMP280, DHT11, LDR Module
+*   **Power:** 2x 18650 Li-ion batteries
 
-## Pin Configuration
+## Project Structure
 
-Based on the default configuration in `rover1.ino`:
-
-### Motor Driver (L298N)
-| ESP32 Pin | Function |
-| :--- | :--- |
-| GPIO 23 | Motor A Enable (ENA) - PWM |
-| GPIO 22 | Motor A Input 1 |
-| GPIO 21 | Motor A Input 2 |
-| GPIO 19 | Motor B Enable (ENB) - PWM |
-| GPIO 18 | Motor B Input 3 |
-| GPIO 5 | Motor B Input 4 |
-
-### Sensors
-| Component | ESP32 Pin | Notes |
-| :--- | :--- | :--- |
-| **Ultrasonic** | | |
-| Trig | GPIO 32 | |
-| Echo | GPIO 35 | |
-| **IR / Edge** | | |
-| Left Sensor | GPIO 17 | |
-| Right Sensor | GPIO 16 | |
-| **Environment** | | |
-| LDR | GPIO 33 | Digital Output from module |
-| LDR LED | GPIO 4 | Status Indicator |
-| DHT11 | GPIO 27 | Data Pin |
-| BMP280 SDA | GPIO 25 | I2C Data |
-| BMP280 SCL | GPIO 26 | I2C Clock |
+```text
+mars-rover/
+├── README.md               # Project documentation
+├── workflows/              # Automation workflows
+│   └── mars_rover_report.json  # n8n workflow for AI analysis
+├── rover1/                 # Main Rover Code (Motors + Sensors)
+│   └── rover1.ino
+└── cam1/                   # Camera Code (Image Capture + Upload)
+    └── cam1.ino
+```
 
 ## Setup & Configuration
 
-1.  **Install Libraries:**
-    Ensure you have the following libraries installed in your Arduino IDE:
-    *   `Adafruit BMP280 Library`
-    *   `DHT sensor library`
-    *   `Adafruit Unified Sensor`
+### 1. Supabase Setup
+1.  Create a Supabase project.
+2.  **Database:** Create a `sensor_readings` table and a `camera_captures` table.
+3.  **Storage:** Create a public bucket named `rover-images`.
+4.  **Policies:** Enable RLS policies to allow `anon` key to INSERT rows and files.
 
-2.  **WiFi Configuration:**
-    Open `rover1.ino` and update the following lines with your WiFi credentials (for data logging):
-    ```cpp
-    const char* wifiSSID = "YOUR_WIFI_SSID";
-    const char* wifiPass = "YOUR_WIFI_PASSWORD";
-    ```
+### 2. ESP32 Configuration
+Update the `ssid`, `password`, `supabaseUrl`, and `supabaseKey` in both `rover1.ino` and `cam1.ino`.
 
-3.  **Webhook Configuration:**
-    Update the `n8nWebhookUrl` variable if you wish to change the data destination:
-    ```cpp
-    const String n8nWebhookUrl = "https://your-n8n-instance.com/webhook/...";
-    ```
-
-4.  **Upload:**
-    Connect your ESP32 and upload the sketch.
-
-## Usage
-
-1.  **Power On:** Turn on the rover.
-2.  **Connect:** Connect your phone/laptop to the WiFi network `ESP32-Car-AP` (Password: `REDACTED_AP_PASS`).
-3.  **Control:** Open a web browser and navigate to `192.168.4.1`.
-4.  **Drive:** Use the on-screen controls to drive or switch to "Autonomous" mode.
+### 3. AI Workflow (n8n)
+Import `workflows/mars_rover_report.json` into n8n.
+*   No external webhook setup needed on the rover (it uploads directly to Supabase).
+*   The workflow triggers via webhook (or manually) to fetch the **latest 5 readings** and analyzing the **latest image**.
