@@ -11,10 +11,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -144,
-        -144
+        -608,
+        -80
       ],
-      "id": "80d3cec4-97db-4847-95c3-dbf448fdcb57",
+      "id": "d50c82bf-021d-485b-8893-3de6c9d9020c",
       "name": "Webhook Trigger",
       "webhookId": "916c5fe0-38e7-4ce9-8849-0aa387027b2e"
     },
@@ -27,14 +27,14 @@
       "type": "n8n-nodes-base.supabaseTool",
       "typeVersion": 1,
       "position": [
-        96,
-        80
+        -240,
+        160
       ],
-      "id": "7a913eb2-5926-4f1c-abfa-9973d6225b0e",
+      "id": "e22a0107-5986-4834-8312-d3139c42ea89",
       "name": "get_readings",
       "credentials": {
         "supabaseApi": {
-          "id": "oShnkSi9lLUwjfn3",
+          "id": "ODrR2WFXWZ78gGfu",
           "name": "Supabase account"
         }
       }
@@ -48,35 +48,15 @@
       "type": "n8n-nodes-base.supabaseTool",
       "typeVersion": 1,
       "position": [
-        272,
-        80
+        16,
+        128
       ],
-      "id": "a38f8fc7-2467-4bca-b86c-b56863aebfbe",
+      "id": "aa4db83c-339c-4764-a940-cf610f02d781",
       "name": "get_images",
       "credentials": {
         "supabaseApi": {
-          "id": "oShnkSi9lLUwjfn3",
+          "id": "ODrR2WFXWZ78gGfu",
           "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-robotics-er-1.5-preview",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1,
-      "position": [
-        -80,
-        80
-      ],
-      "id": "a7f26dd6-656a-4c1b-93d2-350f2d862d80",
-      "name": "Gemini 1.5 Flash",
-      "credentials": {
-        "googlePalmApi": {
-          "id": "Wshgiqj3moHTeX7U",
-          "name": "Google Gemini(PaLM) Api account 3"
         }
       }
     },
@@ -91,10 +71,10 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
       "position": [
-        32,
-        -144
+        -352,
+        -96
       ],
-      "id": "d3239b1d-f8f1-47a1-be5d-137bf8f352ed",
+      "id": "f5793efc-dadc-44e7-a7f7-392b7a748316",
       "name": "Scientific Agent"
     },
     {
@@ -106,11 +86,31 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        384,
-        -144
+        64,
+        -96
       ],
-      "id": "9813b40e-c773-49e6-a1fb-c52f9e6ffbc7",
+      "id": "2991dff9-63a3-43d6-a09a-994a28d238f6",
       "name": "Respond to Dashboard"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3-flash-preview",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        112
+      ],
+      "id": "2a543895-9912-4196-811b-cd8b34f75d2f",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "DbVa5md70VExgHzm",
+          "name": "Google Gemini(PaLM) Api account 3"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -148,17 +148,6 @@
         ]
       ]
     },
-    "Gemini 1.5 Flash": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Scientific Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Scientific Agent": {
       "main": [
         [
@@ -169,17 +158,29 @@
           }
         ]
       ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Scientific Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "availableInMCP": false
   },
-  "versionId": "ac778281-126e-4f2f-9871-c06ee93c18c7",
+  "versionId": "3a981583-b209-4d63-b604-98ef63417f35",
   "meta": {
-    "instanceId": "a9935c7d99d3e5ca8b5bcf125b5e16c3a2e925d129018135e2c7843d0ca5e608"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "73fa6afce35f086602ab1f9f64328d2f6584701c201d61eba3f219395f48f0fe"
   },
-  "id": "Wb7RRVcXtLnC2HaeKCGB1",
+  "id": "GkA1lZyNOuv6Pzkbegwak",
   "tags": []
 }
