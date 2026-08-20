@@ -27,11 +27,9 @@ const int IN2 = 21;
 const int ENB = 19;
 const int IN3 = 18;
 const int IN4 = 5;
-// PWM (ledc) channels
-const int PWM_FREQ = 5000;      // pulse 5000 times per second 
+// PWM (ledc) settings
+const int PWM_FREQ = 5000;      // pulse 5000 times per second
 const int PWM_RES = 8; // 0-255  --> 256 levels of speed
-const int CH_A = 0;        // used in ledcstup 
-const int CH_B = 1;        // channels (2 out of 15) for speed control 
 // ---------- Ultrasonic Pins ----------
 const int TRIG_PIN = 32;
 const int ECHO_PIN = 35;
@@ -84,11 +82,9 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
-  // PWM setup
-  ledcSetup(CH_A, PWM_FREQ, PWM_RES);   //  settings for virtual wires
-  ledcSetup(CH_B, PWM_FREQ, PWM_RES);
-  ledcAttachPin(ENA, CH_A);            // connecting virtual wire/chanels to physical pins
-  ledcAttachPin(ENB, CH_B);
+  // PWM setup (core 3.x pin-based LEDC API)
+  ledcAttach(ENA, PWM_FREQ, PWM_RES);   // attaches PWM directly to the pin, no channel needed
+  ledcAttach(ENB, PWM_FREQ, PWM_RES);
   // Sensors pins
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
@@ -496,27 +492,27 @@ void notFound() { server.send(404, "text/plain", "Not found"); }
 void forward(int speed) {
   digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
-  ledcWrite(CH_A, constrain(speed,0,255)); ledcWrite(CH_B, constrain(speed,0,255));
+  ledcWrite(ENA, constrain(speed,0,255)); ledcWrite(ENB, constrain(speed,0,255));
 }
 void backward(int speed) {
   digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
   digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-  ledcWrite(CH_A, constrain(speed,0,255)); ledcWrite(CH_B, constrain(speed,0,255));
+  ledcWrite(ENA, constrain(speed,0,255)); ledcWrite(ENB, constrain(speed,0,255));
 }
 void leftTurn(int speed) {
   digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-  ledcWrite(CH_A, constrain(speed,0,255)); ledcWrite(CH_B, constrain(speed,0,255));
+  ledcWrite(ENA, constrain(speed,0,255)); ledcWrite(ENB, constrain(speed,0,255));
 }
 void rightTurn(int speed) {
   digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
   digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
-  ledcWrite(CH_A, constrain(speed,0,255)); ledcWrite(CH_B, constrain(speed,0,255));
+  ledcWrite(ENA, constrain(speed,0,255)); ledcWrite(ENB, constrain(speed,0,255));
 }
 void stopMotors() {
   digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
-  ledcWrite(CH_A, 0); ledcWrite(CH_B, 0);
+  ledcWrite(ENA, 0); ledcWrite(ENB, 0);
 }
 // ---------------- Ultrasonic functions ----------------
 long singleUltrasonicReading() {
