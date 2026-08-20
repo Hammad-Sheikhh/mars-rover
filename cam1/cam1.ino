@@ -247,9 +247,23 @@ void setup() {
     config.pin_reset = RESET_GPIO_NUM;
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
-    config.frame_size = FRAMESIZE_VGA;
-    config.jpeg_quality = 12; // Lower quality to reduce size/timeout
-    config.fb_count = 1;
+
+    // Frame buffer needs PSRAM for VGA JPEG capture. Adapt settings based on
+    // whether PSRAM is actually available so a missing/disabled PSRAM setting
+    // degrades gracefully instead of failing camera init outright.
+    if (psramFound()) {
+        config.frame_size = FRAMESIZE_VGA;
+        config.jpeg_quality = 12; // Lower quality to reduce size/timeout
+        config.fb_count = 2;
+        config.fb_location = CAMERA_FB_IN_PSRAM;
+        config.grab_mode = CAMERA_GRAB_LATEST;
+    } else {
+        Serial.println("WARNING: PSRAM not found, falling back to reduced quality/DRAM buffer.");
+        config.frame_size = FRAMESIZE_CIF;
+        config.jpeg_quality = 15;
+        config.fb_count = 1;
+        config.fb_location = CAMERA_FB_IN_DRAM;
+    }
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
