@@ -45,9 +45,10 @@ graph TD
 | AP mode — camera live view | ✅ Working |
 | Earth Station (`earth_station/`) | 🧪 Runs on the simulator |
 | Rover Jev Auto mode (firmware 2.1) | 🧪 Written and compiles; waiting for a test on the real rover |
-| Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start step 5) |
+| Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C) |
 | Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
-| Easy setup, board finder, mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestones 1, 2, 6) |
+| Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
+| Board finder, mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestones 2, 6) |
 
 ---
 
@@ -76,6 +77,8 @@ graph TD
 *   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
 *   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions, even against the simulator.
 *   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
+*   **One place for the hotspot**: type the hotspot name and password once in `.env`; `python -m earth_station.secrets` writes both boards' `secrets.h` from it and makes the rover token.
+*   **Check command**: `python -m earth_station --check` tests the settings files, the rover, the camera and Jev, and says in plain words how to fix each problem. Nothing moves.
 
 Full guide: [docs/EARTH_STATION.md](docs/EARTH_STATION.md). Design walkthrough: open [docs/design/earth-station-plan.html](docs/design/earth-station-plan.html) in a browser.
 
@@ -92,6 +95,8 @@ mars-rover/
 │   ├── cam1.ino              # 👁 Camera firmware (ESP32-CAM)
 │   └── secrets.example.h     # Credential template -> copy to secrets.h
 ├── earth_station/            # 🛰 Laptop ground station (Python) + rover simulator
+│   ├── secrets.py            # Writes both boards' secrets.h from .env, makes the rover token
+│   └── check.py              # `--check`: tests every piece, says how to fix it
 ├── tests/                    # Earth Station tests (pytest)
 ├── scripts/                  # One-command setup: setup.ps1 (Windows), setup.sh (Mac/Linux)
 ├── docs/
@@ -114,36 +119,7 @@ mars-rover/
 
 ## 🚀 Quick Start
 
-### 1. Supabase Setup
-Run [`docs/supabase/schema.sql`](docs/supabase/schema.sql) in the Supabase SQL editor. It creates:
-*   **`sensor_readings`**: `temperature`, `humidity`, `ldr_state`, `pressure`, `altitude`, `pitch`, `roll`, `vibration`, `last_event`
-*   **`camera_captures`**: `image_url`
-*   **Storage bucket `rover_images`** (public)
-*   **Row-level security**: the device (anon) key can only insert, never update or delete.
-
-### 2. Credentials
-Credentials never go in git. Each sketch reads them from a local, git-ignored `secrets.h`:
-
-```sh
-cp rover1/secrets.example.h rover1/secrets.h
-cp cam1/secrets.example.h  cam1/secrets.h
-```
-
-Fill in the WiFi network, AP password and Supabase URL + **anon** key. Never use the `service_role` key on a device.
-
-The rover also needs `ROVER_CMD_TOKEN`: a random password of 8 or more characters that the laptop uses to drive it. Put the same value in the laptop's `.env`. To make one: `python -c "import secrets; print(secrets.token_urlsafe(16))"`.
-
-### 3. Firmware Deployment
-Requires **ESP32 Arduino core 3.x** (uses the pin-based `ledcAttach` API).
-
-*   **Rover**: Open `rover1/rover1.ino` and upload with board **ESP32 Dev Module**.
-    *   Libraries: `Adafruit BMP280`, `Adafruit Unified Sensor`, `DHT sensor library`, `MPU6050_tockn`.
-    *   I2C: SDA 25, SCL 26.
-*   **Camera**: Open `cam1/cam1.ino` and upload with board **AI Thinker ESP32-CAM** (PSRAM enabled).
-
-Keep the rover still while it powers on, because the gyro calibrates at boot.
-
-### 4. Earth Station (any laptop, no rover needed)
+### A. Just the laptop (no rover needed)
 
 1. Install **Python 3.11 or newer** from [python.org](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"** in the installer.
 2. Install **git** from [git-scm.com](https://git-scm.com/downloads).
@@ -169,10 +145,43 @@ Keep the rover still while it powers on, because the gyro calibrates at boot.
    python -m earth_station --sim
    ```
    You should see a pre-flight list of `OK` lines, then one line per decision, like `#7 turn_right 0.91 -> sent, rover ok`. Press `Ctrl+C` to stop.
+7. Try the check command on the fake rover: `python -m earth_station --check --sim`. It should end with **"All 5 checks OK"**.
 
-To connect the real rover today, see [docs/EARTH_STATION.md](docs/EARTH_STATION.md). The simpler hotspot-based setup is planned in [SPEC.md](SPEC.md#5-setup-procedure-the-target).
+### B. With the real rover and camera
 
-### 5. Connect the real Jev (no rover needed)
+Do this once per phone hotspot. You need the boards plugged into your computer with a USB cable, and the **Arduino IDE 2.x** with the **ESP32 board package 3.x** (Tools → Board → Boards Manager → search "esp32" by Espressif).
+
+1. On your phone, turn on the **hotspot**. If it asks, pick the **2.4 GHz** band: ESP32 boards can't see 5 GHz WiFi.
+2. Open `.env` in the project folder (setup created it) and fill in:
+   ```sh
+   WIFI_SSID=<your hotspot name>
+   WIFI_PASS=<your hotspot password>
+   ROVER_AP_PASS=<8+ characters, for the rover's own control page>
+   CAM_AP_PASS=<8+ characters, for the camera's own page>
+   ```
+   Save it. `.env` never goes to GitHub.
+3. Write both boards' settings files:
+   ```sh
+   python -m earth_station.secrets
+   ```
+   It should print `OK` for the rover token, `rover1/secrets.h` and `cam1/secrets.h`. It also makes a long random **rover token** (the password the laptop uses to drive the rover) and saves it in `.env`. Running it again is safe: it keeps the token, and saves any old `secrets.h` as `secrets.h.bak`.
+4. **Flash** (upload the program to) each board from the Arduino IDE:
+   * **Rover**: open `rover1/rover1.ino`, choose board **ESP32 Dev Module**, then click **Upload** (→). Libraries it needs (Tools → Manage Libraries): `Adafruit BMP280 Library`, `Adafruit Unified Sensor`, `DHT sensor library`, `MPU6050_tockn`.
+   * **Camera**: open `cam1/cam1.ino`, choose board **AI Thinker ESP32-CAM** with PSRAM enabled, then **Upload**.
+
+   Keep the rover still while it powers on: the gyro calibrates at boot.
+5. Open the **Serial monitor** (the magnifier icon, top right; set it to **115200 baud**). It shows the messages a board prints. Each board should say it joined WiFi and print its IP address. Write down the **camera's** IP address.
+6. In `.env`, set `CAMERA_URL=http://<camera IP address>`. Leave `ROVER_URL=http://rover.local`: the rover announces that name itself. (The camera gets a name in milestone 4.)
+7. Connect the laptop to the same hotspot, then run:
+   ```sh
+   python -m earth_station --check
+   ```
+   Every line should say `OK`. A line with `X` says what's wrong and how to fix it.
+8. Drive: `python -m earth_station --suggest` first (Jev only suggests, the rover never moves), then press **Jev Auto** on the rover's control page. More in [docs/EARTH_STATION.md](docs/EARTH_STATION.md#run-it-with-the-real-rover).
+
+If someone else flashes the rover, send them `rover1/secrets.h` (or just the token) **privately**, never on GitHub. The token in their `rover1/secrets.h` must equal `ROVER_CMD_TOKEN` in your `.env`; `--check` tells you if they differ.
+
+### C. Connect the real Jev (no rover needed)
 
 1. Get a key: sign in at [console.typesafe.ai/keys](https://console.typesafe.ai/keys) and create an API key. Copy it.
 2. Open `.env` in the repo folder and set:
@@ -187,6 +196,13 @@ To connect the real rover today, see [docs/EARTH_STATION.md](docs/EARTH_STATION.
    ```
    The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
 4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
+
+### D. Supabase (optional, will be removed later)
+The boards also upload readings and photos to Supabase. To use it, put `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` (the **anon** key only, never `service_role`), then run [`docs/supabase/schema.sql`](docs/supabase/schema.sql) in the Supabase SQL editor. It creates:
+*   **`sensor_readings`**: `temperature`, `humidity`, `ldr_state`, `pressure`, `altitude`, `pitch`, `roll`, `vibration`, `last_event`
+*   **`camera_captures`**: `image_url`
+*   **Storage bucket `rover_images`** (public)
+*   **Row-level security**: the device (anon) key can only insert, never update or delete.
 
 ---
 

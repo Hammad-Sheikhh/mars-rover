@@ -85,9 +85,10 @@ The request and reply follow TypeSafe's [API reference](https://docs.typesafe.ai
 
 ## Run it with the real rover
 
-1. Put the rover, the camera and the laptop on **the same WiFi router**. Set `WIFI_SSID` and `WIFI_PASS` in both `secrets.h` files.
-2. Flash `rover1` firmware 2.1 or newer (it has Jev Auto). Its `secrets.h` needs `ROVER_CMD_TOKEN`: a random value, 8+ characters, the same one as in the laptop's `.env`.
-3. In `.env`, set `ROVER_URL=http://rover.local` (the rover announces that name). If the laptop can't find that name, use the IP address the rover prints on the Serial monitor at boot instead. Set `CAMERA_URL` to the camera's IP, and `ROVER_CMD_TOKEN` to the same value as in `rover1/secrets.h`.
+1. Put the rover, the camera and the laptop on **the same phone hotspot**. Type its name and password once in `.env` (`WIFI_SSID`, `WIFI_PASS`, plus `ROVER_AP_PASS` and `CAM_AP_PASS`), then run `python -m earth_station.secrets`. It writes both boards' `secrets.h` from `.env` and makes the shared `ROVER_CMD_TOKEN`.
+2. Flash `rover1` firmware 2.1 or newer (it has Jev Auto) and the camera.
+3. `ROVER_URL=http://rover.local` is the default in `.env.example` (the rover announces that name). If the laptop can't find that name, use the IP address the rover prints on the Serial monitor at boot instead. Set `CAMERA_URL` to the camera's IP.
+   Then run `python -m earth_station --check`: every line should say OK.
 4. Start in **suggest-only** mode first. It decides and logs, but never moves the rover:
    ```sh
    python -m earth_station --suggest

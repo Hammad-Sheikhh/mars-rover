@@ -36,3 +36,4 @@ Write-Host "Setup done. Next:" -ForegroundColor Green
 Write-Host "  .\.venv\Scripts\Activate.ps1"
 Write-Host "  python -m earth_station --sim      # try it with the fake rover"
 Write-Host "  pytest                             # run the tests"
+Write-Host "  python -m earth_station --check    # later, with the real boards"
