@@ -95,6 +95,7 @@ mars-rover/
 ├── pyproject.toml            # Earth Station package + tools
 ├── .env.example              # Credentials / endpoints / Earth Station settings
 ├── CLAUDE.md                 # Guide for Claude Code / contributors
+├── PROGRESS.md               # Project diary: what we did, decided, and what's next
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 └── CHANGELOG.md
@@ -152,6 +153,7 @@ See [docs/EARTH_STATION.md](docs/EARTH_STATION.md) to connect the real rover.
 ## 🤝 Contributing & Security
 
 *   Workflow, branch naming and commit style: [CONTRIBUTING.md](CONTRIBUTING.md)
+*   What we've done so far and what's next: [PROGRESS.md](PROGRESS.md)
 *   System design and known gaps: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 *   Reporting vulnerabilities: [SECURITY.md](SECURITY.md). Please don't open public issues for these.
 

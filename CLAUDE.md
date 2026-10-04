@@ -2,6 +2,16 @@
 
 Guidance for Claude Code (and humans) working in this repository.
 
+## Project diary
+
+@PROGRESS.md
+
+`PROGRESS.md` (imported above, so it's loaded every session) records what we did, what we decided, and what's next.
+
+* **At the start of a session:** use it to pick up where we left off, and briefly remind the person where things stand.
+* **At the end of a session, or after any meaningful change:** add a new entry at the top of the session log (date, session number, numbered plain-language list of what we did, things to remember). Also update "Where we are now", "Decisions so far" and "Next steps".
+* Never put passwords, keys or WiFi names in it. The repo is public.
+
 ## How to work with this team (read first)
 
 The team is new to this domain and to GitHub. **Explain as you go.**
