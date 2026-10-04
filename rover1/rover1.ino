@@ -7,18 +7,19 @@
 #include <DHT.h>
 #include <HTTPClient.h> 
 #include <MPU6050_tockn.h> // NEW: IMU Library
+#include "secrets.h"        // credentials (git-ignored) - copy secrets.example.h to secrets.h
 // ---------- WiFi Station (for internet) ---------- // NEW
-const char* wifiSSID = "REDACTED_SSID"; // Replace with your WiFi name
-const char* wifiPass = "REDACTED_WIFI_PASS"; // Replace with your WiFi password
+const char* wifiSSID = WIFI_SSID;
+const char* wifiPass = WIFI_PASS;
 // ---------- Supabase Configuration ----------
-const String supabaseUrl = "https://your-project-ref.supabase.co";
-const String supabaseKey = "REDACTED_SUPABASE_ANON_KEY";
+const String supabaseUrl = SUPABASE_URL;
+const String supabaseKey = SUPABASE_ANON_KEY;
 // ---------- Data Send Interval ----------
 unsigned long lastSendTime = 0;
 const unsigned long sendIntervalMs = 5000; // Send every 5 seconds
 // ---------- WiFi AP ----------
-const char* apSSID = "ESP32-Car-AP";
-const char* apPass = "REDACTED_AP_PASS";
+const char* apSSID = AP_SSID;
+const char* apPass = AP_PASS;
 WebServer server(80);                   // class/object/port 80 is standard path for http traffic
 // ---------- Motor Pins ----------
 const int ENA = 23;

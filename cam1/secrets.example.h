@@ -1,0 +1,15 @@
+// Copy this file to secrets.h (same folder) and fill in your values.
+// secrets.h is git-ignored. Never commit real credentials.
+#pragma once
+
+// Station mode: the WiFi network with internet access (for Supabase uploads)
+#define WIFI_SSID         "your-wifi-name"
+#define WIFI_PASS         "your-wifi-password"
+
+// Access point hosted by this board (WPA2 needs at least 8 characters)
+#define AP_SSID           "ESP32_CAM_MARS"
+#define AP_PASS           "change-me-123"
+
+// Supabase project settings -> API. Use the anon (public) key, never service_role.
+#define SUPABASE_URL      "https://your-project-ref.supabase.co"
+#define SUPABASE_ANON_KEY "your-anon-key"

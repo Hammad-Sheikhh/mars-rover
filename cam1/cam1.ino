@@ -5,17 +5,18 @@
 #include <esp_http_server.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include "secrets.h" // credentials (git-ignored) - copy secrets.example.h to secrets.h
 
 /* ================= WIFI ================= */
-const char* ssid_sta = "REDACTED_SSID";
-const char* password_sta = "REDACTED_WIFI_PASS";
+const char* ssid_sta = WIFI_SSID;
+const char* password_sta = WIFI_PASS;
 
-const char* ssid_ap = "ESP32_CAM_MARS";
-const char* password_ap = "REDACTED_AP_PASS";
+const char* ssid_ap = AP_SSID;
+const char* password_ap = AP_PASS;
 
 /* ================= SUPABASE CONFIG ================= */
-const String supabaseUrl = "https://your-project-ref.supabase.co";
-const String supabaseKey = "REDACTED_SUPABASE_ANON_KEY";
+const String supabaseUrl = SUPABASE_URL;
+const String supabaseKey = SUPABASE_ANON_KEY;
 const String bucketName = "rover_images";
 
 /* ================= HARDWARE ================= */
