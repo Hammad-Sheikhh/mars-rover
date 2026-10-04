@@ -17,9 +17,12 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
 | Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
-| Rover code for "Jev Auto" mode | ⏳ Next job |
-| Photo descriptions (`earth_station/describe.py`) | ⏳ Teammate's job |
-| Real Jev connection | ⏳ Needs a Jev account and key |
+| Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
+| Easy setup, finding the boards automatically | ⏳ Milestones 1–2 (laptop only) |
+| Rover code for "Jev Auto" mode | ⏳ Milestone 3 (leader writes it, teammate tests it) |
+| Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
+| Mission control page in the browser | ⏳ Milestone 6 |
+| Real Jev connection | ✅ Code ready and tested against TypeSafe's docs. Waiting for a key ($5 of credits) |
 
 **Who has what:** the teammate has the physical rover and camera. The project leader (repo owner) works on the laptop side.
 
@@ -31,19 +34,42 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **n8n and the old web dashboard were removed.** They weren't working.
 - **The repo is public.** Passwords and keys live only in files that never go to GitHub: `.env`, `rover1/secrets.h` and `cam1/secrets.h`.
 - **The leader merges their own pull requests.** A teammate review is welcome but not required.
+- **One phone hotspot** is the shared WiFi for rover, camera and laptop (2026-10-05). *Why:* it goes everywhere and works the same with any laptop.
+- **Boards are found by name** (`rover.local`, `cam.local`), with a network scan as backup. *Why:* nobody has to look up or type IP addresses.
+- **A mission control page** in the laptop's browser, with a big STOP button, alongside the terminal output.
+- **The leader builds the photo descriptions** with Claude vision, instead of the teammate. *Why:* it needs no hardware, and the teammate can focus on testing on the rover.
+- **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **Claude explains every step and every GitHub action in beginner-friendly words** (see `CLAUDE.md`).
 
 ## Next steps
 
-1. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators).
-2. Write the rover code for Jev Auto: a third button on its control page, a way to receive moves from the laptop (`/jev/cmd`), a safety timer, and sending `mode` and `distance_cm`. The rules are in `docs/EARTH_STATION.md`.
-3. The teammate builds `describe.py` (photo → short description).
-4. Get a Jev account and key, then switch `JEV_MODE` to `live` in `.env`.
-5. Optional: a mission control page shown by the Earth Station in the laptop's browser.
+The full build order is in `SPEC.md` section 6.
+
+1. Merge the spec pull request (milestone 0).
+2. **Real Jev:** the code is ready. Buy $5 of credits at console.typesafe.ai (the minimum, about 40 hours of driving), create a key, and put it in `.env` with `JEV_MODE=live`.
+3. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators).
+4. Milestone 1: easy setup (one place for the hotspot details, automatic rover token, `--check` command).
+5. Milestone 3: rover code for Jev Auto, so the teammate has something to test.
+6. Milestones 2, 5, 6: board finder, photo descriptions, mission control page.
 
 ---
 
 ## Session log
+
+### 2026-10-05 — Session 2: the project plan (SPEC.md)
+
+**What we did**
+1. **Explained how the Earth Station works**: look → describe the photo → ask Jev → safety check → send the move → log it, about twice a second.
+2. **Made four decisions** (see "Decisions so far"): phone hotspot, boards found by name, a mission control page, and the leader builds photo descriptions.
+3. **Wrote `SPEC.md`**: the goal, a glossary, who does what, requirements, the target setup procedure and 9 milestones in build order.
+4. **Added to `CLAUDE.md`**: follow the spec, work without the rover (simulator first, a hardware checklist for the teammate in firmware PRs), and teach as we build.
+5. **Rewrote the README's laptop setup** as numbered beginner steps, and linked the spec.
+6. **Connected the code to the real Jev** using TypeSafe's official docs. The old code listed the moves in the wrong field. Fixed, and 6 tests added. A key needs at least $5 of credits, about 40 hours of driving at 2 questions a second. The leader will buy credits later, so we use the pretend Jev for now.
+
+**Things to remember**
+- Real Jev: put the key in `.env` (`JEV_API_KEY`) and set `JEV_MODE=live`. Never paste it in chat or code. `DECIDE_EVERY_MS=1000` halves the cost.
+- The leader has no rover right now, so laptop-side milestones (1, 2, 5, 6) can all be done before the hardware comes back.
+- ESP32 boards only see **2.4 GHz** WiFi. Set the phone hotspot to 2.4 GHz if it asks.
 
 ### 2026-10-04 — Session 1: clean-up, going public, Earth Station
 

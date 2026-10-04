@@ -9,6 +9,8 @@ A two-board Mars rover. The main ESP32 drives the rover, avoids obstacles and lo
 
 The **Earth Station** is a Python program on a laptop that lets the **Jev** AI drive the rover (*Jev Auto* mode), using the rover's telemetry and a description of what the camera sees.
 
+📋 **The plan:** [SPEC.md](SPEC.md) has the requirements, the target setup (one phone hotspot, boards found automatically, a mission control page) and the milestones in build order.
+
 ---
 
 ## 🏗 System Architecture
@@ -43,7 +45,8 @@ graph TD
 | AP mode — camera live view | ✅ Working |
 | Earth Station (`earth_station/`) | 🧪 Runs on the simulator; rover firmware for Jev Auto is next |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start step 5) |
-| Photo descriptions (`describe.py`) | 🚧 Teammate, in progress |
+| Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
+| Easy setup, board finder, mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestones 1, 2, 6) |
 
 ---
 
@@ -96,6 +99,7 @@ mars-rover/
 ├── .github/                  # CI (compile + secret scan), PR/issue templates
 ├── pyproject.toml            # Earth Station package + tools
 ├── .env.example              # Credentials / endpoints / Earth Station settings
+├── SPEC.md                   # The plan: requirements, target setup, milestones
 ├── CLAUDE.md                 # Guide for Claude Code / contributors
 ├── PROGRESS.md               # Project diary: what we did, decided, and what's next
 ├── CONTRIBUTING.md
@@ -134,21 +138,34 @@ Requires **ESP32 Arduino core 3.x** (uses the pin-based `ledcAttach` API).
 
 Keep the rover still while it powers on, because the gyro calibrates at boot.
 
-### 4. Earth Station (any laptop, Python 3.11+)
+### 4. Earth Station (any laptop, no rover needed)
 
-```sh
-# Windows
-powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
-.\.venv\Scripts\Activate.ps1
+1. Install **Python 3.11 or newer** from [python.org](https://www.python.org/downloads/). On Windows, tick **"Add Python to PATH"** in the installer.
+2. Install **git** from [git-scm.com](https://git-scm.com/downloads).
+3. Open a terminal (Windows: PowerShell) and get the project:
+   ```sh
+   git clone https://github.com/Hammad-Sheikhh/mars-rover.git
+   cd mars-rover
+   ```
+4. Run the one-time setup. It creates a private Python install in `.venv/`, installs everything, and creates your `.env` settings file:
+   ```sh
+   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1   # Windows
+   sh scripts/setup.sh                                          # macOS / Linux
+   ```
+   It should end with **"Setup done"**.
+5. Turn on the private Python install (do this each time you open a new terminal):
+   ```sh
+   .\.venv\Scripts\Activate.ps1    # Windows
+   . .venv/bin/activate            # macOS / Linux
+   ```
+   Your prompt now starts with `(.venv)`.
+6. Try it with the built-in fake rover:
+   ```sh
+   python -m earth_station --sim
+   ```
+   You should see a pre-flight list of `OK` lines, then one line per decision, like `#7 turn_right 0.91 -> sent, rover ok`. Press `Ctrl+C` to stop.
 
-# macOS / Linux
-sh scripts/setup.sh
-. .venv/bin/activate
-
-python -m earth_station --sim     # try it with the built-in fake rover
-```
-
-See [docs/EARTH_STATION.md](docs/EARTH_STATION.md) to connect the real rover.
+To connect the real rover today, see [docs/EARTH_STATION.md](docs/EARTH_STATION.md). The simpler hotspot-based setup is planned in [SPEC.md](SPEC.md#5-setup-procedure-the-target).
 
 ### 5. Connect the real Jev (no rover needed)
 
@@ -171,6 +188,7 @@ See [docs/EARTH_STATION.md](docs/EARTH_STATION.md) to connect the real rover.
 ## 🤝 Contributing & Security
 
 *   Workflow, branch naming and commit style: [CONTRIBUTING.md](CONTRIBUTING.md)
+*   The plan and build order: [SPEC.md](SPEC.md)
 *   What we've done so far and what's next: [PROGRESS.md](PROGRESS.md)
 *   System design and known gaps: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 *   Reporting vulnerabilities: [SECURITY.md](SECURITY.md). Please don't open public issues for these.

@@ -211,4 +211,4 @@ CI runs both on every pull request.
 ## Not done yet
 
 * **Rover firmware** for the protocol above. It's the next PR.
-* **`describe.py` live mode**, for the teammate. Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.
+* **`describe.py` live mode** (project leader, [SPEC.md](../SPEC.md) milestone 5). Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.

@@ -23,6 +23,24 @@ The team is new to this domain and to GitHub. **Explain as you go.**
 * Define technical words the first time you use them. Prefer short analogies over jargon.
 * Give one clear recommendation, not a list of options, unless asked to compare.
 * Warn before anything hard to undo (making the repo public, force-pushing, deleting branches, merging), and explain the consequence.
+* **Teach as we build.** The project leader built the first version with AI help and wants to understand it now. When you finish a milestone, add a short "What you learned" recap: 3–5 bullets on how that piece works and why it's built that way.
+* Explain **robotics and hardware** ideas the same way you explain git: what a board, firmware, flashing, the Serial monitor, a watchdog or mDNS is, the first time each one comes up.
+
+## The plan: SPEC.md
+
+`SPEC.md` is the project plan: requirements, the target setup procedure, and the milestones in build order.
+
+* Before starting work, say which milestone (section 6) it belongs to. If the person asks for something that isn't in the spec, say so, and update the spec in the same PR if they want to go ahead.
+* If a decision changes the plan, update `SPEC.md` (and `PROGRESS.md` → "Decisions so far").
+* The README shows what works **today**. The spec shows the **target**. Don't put planned steps in the README's Quick Start until they work.
+
+## Working without the rover
+
+The project leader has the laptop but **not** the rover. The teammate has the rover and camera.
+
+* Every laptop-side feature must run and be tested against the simulator (`--sim`, `sim.py`) and the mocks. Never require hardware, internet or API keys for tests.
+* Firmware changes: the leader writes them, CI compile-checks them, and the teammate tests on hardware. Every firmware PR includes a **hardware test checklist for the teammate**: numbered steps (what to flash, what to press) and what they should see (Serial monitor lines, page behaviour). Say clearly that you couldn't test on hardware.
+* Network plan: one **phone hotspot** shared by rover, camera and laptop. Boards are found as `rover.local` / `cam.local`, with a network scan as backup. Nobody should have to type an IP address.
 
 ## Keep the README current
 
@@ -42,6 +60,7 @@ Arduino firmware for a two-board Mars rover (both boards upload to Supabase), pl
 
 * `rover1/rover1.ino`: main ESP32. Drives the motors, avoids obstacles, reads sensors, serves a local control page on its own AP, and posts telemetry to Supabase.
 * `cam1/cam1.ino`: AI Thinker ESP32-CAM. Serves a live view page on its own AP and uploads JPEGs to Supabase Storage.
+* `SPEC.md`: the plan (requirements, target setup, milestones). **Read it before starting new work.**
 * `docs/ARCHITECTURE.md`: system design, pin map, data model, security model and known gaps. **Read it before changing behaviour.**
 * `docs/supabase/schema.sql`: recommended tables and RLS policies.
 * `earth_station/`: Python ground station. `sim.py` is a fake rover and camera that follows the rover protocol. **`docs/EARTH_STATION.md` defines that protocol (`/sensors/data` fields, `/jev/cmd`)**, so firmware and Python must stay in sync with it.
