@@ -18,7 +18,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
 | Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
-| Easy setup, finding the boards automatically | ⏳ Milestones 1–2 (laptop only) |
+| Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 built (PR on `feat/easy-setup`) |
+| Finding the boards automatically | ⏳ Milestone 2 (laptop only) |
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
 | Mission control page in the browser | ⏳ Milestone 6 |
@@ -38,6 +39,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **Boards are found by name** (`rover.local`, `cam.local`), with a network scan as backup. *Why:* nobody has to look up or type IP addresses.
 - **A mission control page** in the laptop's browser, with a big STOP button, alongside the terminal output.
 - **The leader builds the photo descriptions** with Claude vision, instead of the teammate. *Why:* it needs no hardware, and the teammate can focus on testing on the rover.
+- **`.env` is the one place for board settings** (2026-10-05). `python -m earth_station.secrets` writes both `secrets.h` files from it. *Why:* the two boards can never end up on different networks, and nobody has to invent a token.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **Claude explains every step and every GitHub action in beginner-friendly words** (see `CLAUDE.md`).
 
@@ -45,16 +47,29 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Merge the pull requests in order: #5 (spec), then #6 (Jev), then #7 (rover Jev Auto, after CI is green).
-2. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them the rover token **privately** (it's in `.env` as `ROVER_CMD_TOKEN`).
-3. Teammate: flash firmware 2.1 and run the hardware checklist in PR #7.
-4. **Real Jev:** the code is ready. Buy $5 of credits at console.typesafe.ai (the minimum, about 40 hours of driving), create a key, and put it in `.env` with `JEV_MODE=live`.
-5. Milestone 1: easy setup (one place for the hotspot details, automatic rover token, `--check` command).
+1. Merge the milestone 1 pull request (easy setup).
+2. **Update your own `.env`:** it still uses the old names. Rename `ROVER_WIFI_SSID` to `WIFI_SSID` and `ROVER_WIFI_PASS` to `WIFI_PASS` (set them to the phone hotspot), and delete the `CAM_WIFI_...` lines. Then `python -m earth_station.secrets` and `python -m earth_station --check`.
+3. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them `rover1/secrets.h` (or just the rover token) **privately**.
+4. Teammate: flash firmware 2.1 and run the hardware checklist in PR #7.
+5. **Real Jev:** buy $5 of credits at console.typesafe.ai, create a key, and put it in `.env` with `JEV_MODE=live`.
 6. Milestones 2, 4, 5, 6: board finder, camera name, photo descriptions, mission control page.
 
 ---
 
 ## Session log
+
+### 2026-10-05 — Session 3: easy setup (milestone 1)
+
+**What we did**
+1. **One place for the hotspot.** `.env` now has `WIFI_SSID` and `WIFI_PASS`, shared by both boards. The old `ROVER_WIFI_...` and `CAM_WIFI_...` settings are gone.
+2. **`python -m earth_station.secrets`**: a helper that writes `rover1/secrets.h` and `cam1/secrets.h` from `.env`, and makes a long random rover token. Running it again is safe. It keeps an old copy as `secrets.h.bak`, which git also ignores.
+3. **`python -m earth_station --check`**: tests the settings files, the rover, the camera and Jev. Each problem comes with a "fix:" line. It only ever sends the rover a `stop`, so nothing moves. `--check --sim` tries it on the fake rover.
+4. **Rewrote the README Quick Start** in four parts: A just the laptop, B the real boards, C the real Jev, D Supabase (optional).
+5. **13 new tests** (46 in total). We also tested a fresh copy of the project from zero to `--sim` by following the README.
+
+**Things to remember**
+- Until milestone 2, `--check` and the station use `ROVER_URL` (`http://rover.local`) and `CAMERA_URL` (the camera's IP, from its Serial monitor).
+- Our own `.env` still has the old names: see "Next steps" step 2.
 
 ### 2026-10-05 — Session 2: the project plan (SPEC.md)
 
