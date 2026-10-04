@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Design page. Open in a browser. Mermaid diagrams render via the script at the end. -->
+<title>Earth Station Autopilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single beginner-friendly column; one big interactive loop diagram is the centerpiece. Same mission-control identity as the options page. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --sunken: #e4e8ed;
+  --fg: #17202a;
+  --muted: #5b6673;
+  --line: #c9d0d8;
+  --accent: #b5441b;
+  --accent-2: #0f7c76;
+  --good: #1f7a3f;
+  --warn: #9a6500;
+  --bad: #b3261e;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --surface: #161d25; --sunken: #1c252f; --fg: #e6ebf0; --muted: #98a4b1;
+    --line: #34404c; --accent: #e57a4a; --accent-2: #45bdb2; --good: #5ac47f; --warn: #e0a73a; --bad: #f07167;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #161d25; --sunken: #1c252f; --fg: #e6ebf0; --muted: #98a4b1;
+  --line: #34404c; --accent: #e57a4a; --accent-2: #45bdb2; --good: #5ac47f; --warn: #e0a73a; --bad: #f07167;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16.5px; line-height: 1.65; padding-inline: 16px; padding-block: 0 64px; }
+.wrap { max-width: 940px; margin-inline: auto; display: grid; gap: 64px; }
+.prose { max-width: 70ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5.5vw, 3.1rem); font-weight: 700; }
+h2 { font-size: 1.65rem; font-weight: 600; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent-2); }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--sunken); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.stack { display: grid; gap: 14px; }
+.stack-lg { display: grid; gap: 26px; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.hero { padding-block: 48px 32px; border-bottom: 1px solid var(--line); display: grid; gap: 18px; }
+.lede { font-size: 1.15rem; max-width: 66ch; }
+.aside-note { font-size: 0.92rem; color: var(--muted); max-width: 66ch; }
+
+/* Cast */
+.cast { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.role .tag { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.role b { font-family: var(--display); font-size: 1.12rem; }
+.role span { color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+.role.brain { border-color: var(--accent-2); box-shadow: inset 0 0 0 1px var(--accent-2); }
+
+/* Loop diagram */
+.loop { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .loop { grid-template-columns: 1fr; } }
+.svgbox { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; overflow-x: auto; }
+.svgbox svg { display: block; width: 100%; min-width: 520px; height: auto; }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg .laptop { fill: var(--sunken); stroke: var(--accent-2); stroke-width: 1.5; stroke-dasharray: 6 4; }
+svg .mod { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg .ext { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg text { fill: var(--fg); font-family: var(--body); font-size: 15px; }
+svg text.title { font-family: var(--display); font-weight: 600; font-size: 17px; }
+svg text.small { fill: var(--muted); font-size: 12.5px; }
+svg text.lbl { fill: var(--accent-2); font-family: var(--mono); font-size: 12px; letter-spacing: .06em; }
+svg .wire { fill: none; stroke: var(--muted); stroke-width: 2; }
+svg .num { fill: var(--accent); }
+svg .numtxt { fill: var(--surface); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+svg .arrowhead { fill: var(--muted); }
+/* highlight logic */
+svg [data-s] { transition: opacity .25s; }
+svg.active [data-s] { opacity: .22; }
+svg.active [data-s].on { opacity: 1; }
+svg.active .on .box, svg.active .on .mod, svg.active .on .ext { stroke: var(--accent); stroke-width: 2.5; }
+svg.active .wire.on { stroke: var(--accent); stroke-width: 3; }
+@media (prefers-reduced-motion: reduce) { svg [data-s] { transition: none; } }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: s; }
+.steps li { counter-increment: s; }
+.steps button {
+  width: 100%; text-align: left; display: grid; grid-template-columns: 28px 1fr; gap: 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: var(--fg); cursor: pointer; line-height: 1.45;
+}
+.steps button::before { content: counter(s); font-family: var(--mono); font-weight: 600; color: var(--accent); }
+.steps button:hover { border-color: var(--accent); }
+.steps button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.steps small { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+.ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+.ctrl button { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: var(--mono); font-size: 0.8rem; }
+.ctrl button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Tables & panels */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.95rem; }
+th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--sunken); }
+tbody tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; font-family: var(--mono); font-size: 0.74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.good { color: var(--good); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); }
+
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.diagram pre.mermaid { margin: 0; min-width: 520px; display: flex; justify-content: center; background: transparent; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 10px; align-content: start; }
+.panel h3 .who { font-family: var(--mono); font-size: 0.72rem; letter-spacing: .1em; color: var(--accent); display: block; margin-bottom: 4px; }
+ul.check { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+ul.check li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; }
+ul.check li::before { content: ""; width: 12px; height: 12px; margin-top: 6px; border: 1.5px solid var(--muted); border-radius: 3px; }
+
+.phases { display: grid; gap: 0; border-left: 2px solid var(--line); margin-left: 8px; }
+.phase { position: relative; padding: 0 0 24px 26px; display: grid; gap: 4px; }
+.phase:last-child { padding-bottom: 0; }
+.phase::before { content: ""; position: absolute; left: -8px; top: 5px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.phase .eyebrow { color: var(--accent); }
+
+.callout { border-left: 3px solid var(--accent-2); background: var(--surface); padding: 14px 18px; border-radius: 0 10px 10px 0; display: grid; gap: 8px; }
+.callout.warn { border-left-color: var(--warn); }
+
+dl.gloss { display: grid; grid-template-columns: minmax(110px, max-content) 1fr; gap: 10px 18px; margin: 0; }
+dl.gloss dt { font-family: var(--mono); font-size: 0.85rem; font-weight: 500; padding-top: 2px; }
+dl.gloss dd { margin: 0; color: var(--fg); }
+@media (max-width: 480px) { dl.gloss { grid-template-columns: 1fr; gap: 2px; } dl.gloss dd { margin-bottom: 10px; } }
+
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 20px; }
+
+/* Earth Station internals */
+.subnav { display: flex; flex-wrap: wrap; gap: 8px; }
+.subnav a { font-family: var(--mono); font-size: 0.78rem; text-decoration: none; color: var(--fg); border: 1px solid var(--line); background: var(--surface); padding: 5px 11px; border-radius: 999px; }
+.subnav a:hover { border-color: var(--accent); color: var(--accent); }
+.workers { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.worker { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.worker .rate { font-family: var(--mono); font-size: 0.75rem; color: var(--accent-2); letter-spacing: .06em; }
+.worker b { font-family: var(--display); font-size: 1.05rem; }
+.worker p { color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+.worker .io { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); border-top: 1px dashed var(--line); padding-top: 8px; display: grid; gap: 2px; }
+.whiteboard { background: var(--surface); border: 1px solid var(--accent-2); border-radius: 10px; padding: 18px; display: grid; gap: 12px; }
+.wb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 20px; font-family: var(--mono); font-size: 0.85rem; }
+.wb-grid div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dotted var(--line); padding-block: 3px; min-width: 0; }
+.wb-grid span:first-child { color: var(--muted); }
+.wb-grid span:last-child { text-align: right; overflow-wrap: anywhere; }
+
+.journey { display: grid; gap: 0; }
+.hop { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; padding-bottom: 22px; position: relative; }
+.hop:not(:last-child)::after { content: ""; position: absolute; left: 21px; top: 40px; bottom: 4px; width: 2px; background: var(--line); }
+.hop .badge { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--accent); display: grid; place-items: center; font-family: var(--mono); font-weight: 600; color: var(--accent); background: var(--bg); }
+.hop .body { display: grid; gap: 8px; min-width: 0; }
+.hop .body .t { color: var(--muted); font-family: var(--mono); font-size: 0.78rem; }
+pre.code { margin: 0; overflow-x: auto; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 0.8rem; line-height: 1.55; color: var(--fg); }
+pre.code .c { color: var(--muted); }
+pre.code .k { color: var(--accent); }
+pre.code .s { color: var(--accent-2); }
+
+.timeline { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+.tl { min-width: 640px; display: grid; grid-template-columns: 150px 1fr; gap: 10px 12px; align-items: center; font-size: 0.85rem; }
+.tl .name { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+.tl .lane { position: relative; height: 26px; background: var(--sunken); border-radius: 5px; }
+.tl .blk { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; background: var(--accent-2); opacity: .85; }
+.tl .blk.slow { background: var(--warn); }
+.tl .blk.jev { background: var(--accent); }
+.tl .blk.go { background: var(--good); }
+.tl .axis { position: relative; height: 18px; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.tl .axis span { position: absolute; transform: translateX(-50%); }
+
+.tree { font-family: var(--mono); font-size: 0.84rem; line-height: 1.7; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0; color: var(--fg); }
+.tree .c { color: var(--muted); }
+.console { background: #10161d; color: #d7e0e8; border-radius: 10px; padding: 16px; font-family: var(--mono); font-size: 0.8rem; line-height: 1.6; overflow-x: auto; margin: 0; border: 1px solid var(--line); }
+.console .g { color: #6fd08c; } .console .y { color: #e6b450; } .console .r { color: #ff7b72; } .console .d { color: #7d8b99; } .console .b { color: #79c0ff; }
+.rules { display: grid; gap: 8px; counter-reset: r; list-style: none; padding: 0; margin: 0; }
+.rules li { counter-increment: r; display: grid; grid-template-columns: 30px 1fr; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.rules li::before { content: counter(r); font-family: var(--mono); font-weight: 600; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Mars Rover · the chosen plan</div>
+  <h1>Earth Station Autopilot</h1>
+  <p class="lede">Your laptop becomes mission control. Twice a second it reads the rover's sensors, looks at what the camera sees, asks Jev "what should the rover do next?", and sends the answer back to the rover. The rover's own safety reflexes can always say no, and your phone can always take over.</p>
+  <p class="aside-note">On the earlier options page this was option 3, the ground station. The "hybrid" you mentioned is the upgrade at the end of this page: a smarter AI that sets goals once the basic loop works.</p>
+</header>
+
+<!-- CAST -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">The big idea</div>
+    <h2>Five parts, one team</h2>
+    <p>Think of it like a person: the rover is the body, the camera is the eyes, and the laptop is the brain that connects them. The laptop asks two online AI services for help: one to <i>describe</i> what the eyes see, and one (Jev) to <i>decide</i> the next move.</p>
+  </div>
+  <div class="cast">
+    <div class="role"><span class="tag">Body</span><b>Rover (ESP32)</b><span>Has the motors and sensors: distance, tilt, temperature, pressure. Does what it's told, but refuses anything dangerous.</span></div>
+    <div class="role"><span class="tag">Eyes</span><b>Camera (ESP32-CAM)</b><span>Takes photos. Already serves them on its own web page, so the laptop can grab one any time.</span></div>
+    <div class="role brain"><span class="tag">Brain</span><b>Earth Station (laptop)</b><span>A Python program you run. It collects everything, talks to the AIs and sends commands. All secret keys stay here.</span></div>
+    <div class="role"><span class="tag">Describer</span><b>Vision AI</b><span>An online AI that turns a photo into one sentence: "chair leg ahead, open floor on the right." Your teammate builds this part.</span></div>
+    <div class="role"><span class="tag">Decider</span><b>Jev</b><span>A very fast AI. Given the situation in words, it picks one move from a list (forward, left, right, back, stop) and says how sure it is.</span></div>
+  </div>
+</section>
+
+<!-- LOOP -->
+<section class="stack-lg" id="loop">
+  <div class="stack prose">
+    <div class="eyebrow">How one decision happens</div>
+    <h2>The loop, step by step</h2>
+    <p>Click a step to see where it happens, or press <b>Play</b>. The whole loop takes about half a second and then starts again.</p>
+  </div>
+  <div class="loop">
+    <div class="svgbox">
+      <svg id="dia" viewBox="0 0 900 470" role="img" aria-label="Loop diagram: rover and camera on the left, the laptop Earth Station in the middle with four steps, the Vision AI and Jev online on the right.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <!-- Rover -->
+        <g data-s="1 7">
+          <rect class="box" x="20" y="50" width="230" height="140" rx="12"/>
+          <text class="title" x="40" y="82">Rover</text>
+          <text class="small" x="40" y="106">sensors + motors</text>
+          <text class="small" x="40" y="128">reflexes: stops near walls,</text>
+          <text class="small" x="40" y="146">stops if tilted, stops if silent</text>
+          <text class="lbl" x="40" y="174">AP PAGE STILL WORKS</text>
+        </g>
+        <!-- Camera -->
+        <g data-s="3">
+          <rect class="box" x="20" y="280" width="230" height="130" rx="12"/>
+          <text class="title" x="40" y="312">Camera</text>
+          <text class="small" x="40" y="336">takes a photo on request</text>
+          <text class="small" x="40" y="356">at /capture</text>
+          <text class="lbl" x="40" y="390">AP PAGE STILL WORKS</text>
+        </g>
+
+        <!-- Laptop -->
+        <g>
+          <rect class="laptop" x="310" y="20" width="320" height="430" rx="14"/>
+          <text class="title" x="330" y="50">Earth Station (laptop)</text>
+        </g>
+        <g data-s="2"><rect class="mod" x="340" y="70" width="260" height="62" rx="8"/><text x="360" y="98">Read sensors</text><text class="small" x="360" y="118">distance, tilt, temperature…</text></g>
+        <g data-s="4"><rect class="mod" x="340" y="160" width="260" height="62" rx="8"/><text x="360" y="188">Describe the photo</text><text class="small" x="360" y="208">teammate's module</text></g>
+        <g data-s="5"><rect class="mod" x="340" y="250" width="260" height="62" rx="8"/><text x="360" y="278">Ask Jev</text><text class="small" x="360" y="298">"which move is safest?"</text></g>
+        <g data-s="6"><rect class="mod" x="340" y="340" width="260" height="62" rx="8"/><text x="360" y="368">Safety check</text><text class="small" x="360" y="388">is Jev sure enough?</text></g>
+        <path class="wire" d="M470,132 V158" marker-end="url(#ah)"/>
+        <path class="wire" d="M470,222 V248" marker-end="url(#ah)"/>
+        <path class="wire" d="M470,312 V338" marker-end="url(#ah)"/>
+
+        <!-- Online -->
+        <g data-s="4"><rect class="ext" x="690" y="150" width="190" height="84" rx="40"/><text class="title" x="725" y="186">Vision AI</text><text class="small" x="725" y="208">online</text></g>
+        <g data-s="5"><rect class="ext" x="690" y="260" width="190" height="84" rx="40"/><text class="title" x="745" y="296">Jev</text><text class="small" x="745" y="318">online</text></g>
+        <text class="lbl" x="700" y="130">INTERNET</text>
+
+        <!-- Wires -->
+        <path class="wire" data-s="2" d="M250,105 H338" marker-end="url(#ah)"/>
+        <path class="wire" data-s="3" d="M250,320 C290,320 300,200 338,195" marker-end="url(#ah)"/>
+        <path class="wire" data-s="4" d="M602,191 H688" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <path class="wire" data-s="5" d="M602,281 C640,281 650,300 688,300" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <path class="wire" data-s="7" d="M340,380 C280,380 290,175 252,170" marker-end="url(#ah)"/>
+
+        <!-- step numbers -->
+        <g data-s="1"><circle class="num" cx="236" cy="64" r="11"/><text class="numtxt" x="232" y="68">1</text></g>
+        <g data-s="2"><circle class="num" cx="294" cy="92" r="11"/><text class="numtxt" x="290" y="96">2</text></g>
+        <g data-s="3"><circle class="num" cx="296" cy="262" r="11"/><text class="numtxt" x="292" y="266">3</text></g>
+        <g data-s="4"><circle class="num" cx="645" cy="178" r="11"/><text class="numtxt" x="641" y="182">4</text></g>
+        <g data-s="5"><circle class="num" cx="645" cy="268" r="11"/><text class="numtxt" x="641" y="272">5</text></g>
+        <g data-s="6"><circle class="num" cx="586" cy="354" r="11"/><text class="numtxt" x="582" y="358">6</text></g>
+        <g data-s="7"><circle class="num" cx="286" cy="300" r="11"/><text class="numtxt" x="282" y="304">7</text></g>
+      </svg>
+    </div>
+    <div class="stack">
+      <ol class="steps" id="steps">
+        <li><button type="button" data-step="1">The rover measures<small>Distance ahead, tilt, bumps. It does this constantly, as it does today.</small></button></li>
+        <li><button type="button" data-step="2">Laptop reads the numbers<small>It asks the rover's existing <code>/sensors/data</code> page over WiFi.</small></button></li>
+        <li><button type="button" data-step="3">Laptop grabs a photo<small>From the camera's existing <code>/capture</code> page, about once a second.</small></button></li>
+        <li><button type="button" data-step="4">Vision AI describes it<small>"Chair leg about 50 cm ahead, slightly left; open floor right."</small></button></li>
+        <li><button type="button" data-step="5">Jev picks a move<small>The laptop writes the situation in plain words; Jev answers "turn right, 87% sure".</small></button></li>
+        <li><button type="button" data-step="6">Safety check<small>Under 60% sure? Send "stop" instead.</small></button></li>
+        <li><button type="button" data-step="7">Rover moves for 0.3 s<small>Unless its own sensors disagree. Then the loop repeats.</small></button></li>
+      </ol>
+      <div class="ctrl">
+        <button type="button" id="play">Play</button>
+        <button type="button" id="all">Show all</button>
+      </div>
+    </div>
+  </div>
+  <div class="callout prose">
+    <b>Why describe the photo instead of sending it to Jev?</b>
+    <p>Jev only understands text. It can't look at pictures. So a vision AI first turns the photo into a short sentence, and Jev reads that sentence. The photo step is slower (1–3 s), so it runs side by side with the driving loop: Jev always uses the most recent description it has.</p>
+  </div>
+</section>
+
+<!-- ================= INSIDE THE EARTH STATION ================= -->
+<section class="stack-lg" id="inside">
+  <div class="stack prose">
+    <div class="eyebrow">Deep dive</div>
+    <h2>Inside the Earth Station</h2>
+    <p>The Earth Station is one Python program on your laptop. You start it from a terminal, it runs until you press <code>Ctrl+C</code>, and while it runs it prints what it's thinking. This section opens it up: what it's made of, how the parts share information, what one decision looks like with real data, and what you'll see on screen.</p>
+  </div>
+  <nav class="subnav" aria-label="Earth Station sections">
+    <a href="#es-workers">Its 5 workers</a>
+    <a href="#es-board">The shared whiteboard</a>
+    <a href="#es-journey">One decision, with real data</a>
+    <a href="#es-timing">Timing</a>
+    <a href="#es-gate">Safety gate rules</a>
+    <a href="#es-start">Start-up and shut-down</a>
+    <a href="#es-screen">What you'll see</a>
+    <a href="#es-files">Files and settings</a>
+    <a href="#es-code">The main loop in code</a>
+  </nav>
+
+  <!-- workers -->
+  <div class="stack" id="es-workers">
+    <h3>Five workers running at the same time</h3>
+    <p class="prose">A program can do several jobs at once, like a small team. The Earth Station has five "workers". Each does one job at its own speed, so a slow job (describing a photo takes 1–3 s) never holds up a fast one (reading sensors takes about 0.05 s).</p>
+    <div class="workers">
+      <div class="worker"><span class="rate">EVERY 0.2 s</span><b>Sensor reader</b><p>Asks the rover for its latest numbers and writes them on the whiteboard.</p><div class="io"><span>in: rover /sensors/data</span><span>out: whiteboard.telemetry</span></div></div>
+      <div class="worker"><span class="rate">EVERY 1–2 s</span><b>Camera watcher</b><p>Grabs a photo, hands it to the teammate's describe function, and writes the description on the whiteboard.</p><div class="io"><span>in: camera /capture</span><span>out: whiteboard.scene</span></div></div>
+      <div class="worker"><span class="rate">EVERY 0.5 s</span><b>Decision maker</b><p>Reads the whiteboard, writes the situation in words, asks Jev, and passes Jev's answer on.</p><div class="io"><span>in: whiteboard</span><span>out: proposed move</span></div></div>
+      <div class="worker"><span class="rate">EACH DECISION</span><b>Safety gate + sender</b><p>Checks the proposed move against the rules below, then sends it to the rover, or sends "stop".</p><div class="io"><span>in: proposed move</span><span>out: rover /jev/cmd</span></div></div>
+      <div class="worker"><span class="rate">ALWAYS</span><b>Logger</b><p>Prints each step on screen and saves it to a file, so you can replay a run later and see why the rover turned.</p><div class="io"><span>in: everything</span><span>out: screen + runs/*.jsonl</span></div></div>
+    </div>
+  </div>
+
+  <!-- whiteboard -->
+  <div class="stack" id="es-board">
+    <h3>The shared whiteboard</h3>
+    <p class="prose">The workers never talk to each other directly. They all read and write one shared notebook in memory, the <b>whiteboard</b>. Each value carries the time it was written, so the decision maker can tell when something is too old to trust. This is what the whiteboard looks like at one moment:</p>
+    <div class="whiteboard">
+      <div class="eyebrow" style="color:var(--accent-2)">whiteboard · 14:32:07.420</div>
+      <div class="wb-grid">
+        <div><span>rover mode</span><span>JEV_AUTO</span></div>
+        <div><span>distance ahead</span><span>62 cm</span></div>
+        <div><span>pitch / roll</span><span>3.1° / -1.2°</span></div>
+        <div><span>vibration</span><span>0.04 (smooth)</span></div>
+        <div><span>last event</span><span>Nominal</span></div>
+        <div><span>telemetry age</span><span>0.12 s</span></div>
+        <div><span>scene</span><span>chair leg ~50 cm ahead, left; open floor right</span></div>
+        <div><span>clear side</span><span>right</span></div>
+        <div><span>scene age</span><span>0.9 s</span></div>
+        <div><span>last move sent</span><span>forward · 300 ms</span></div>
+        <div><span>goal</span><span>explore</span></div>
+        <div><span>command number</span><span>4181</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- journey -->
+  <div class="stack" id="es-journey">
+    <h3>One decision, with real data</h3>
+    <p class="prose">Here is exactly what goes over the wire during one half-second cycle. Grey comments explain each part.</p>
+    <div class="journey">
+      <div class="hop"><div class="badge">A</div><div class="body">
+        <b>Sensor reader asks the rover</b><span class="t">laptop → rover · about 50 ms</span>
+<pre class="code"><span class="k">GET</span> http://192.168.1.42/sensors/data
+
+{ <span class="s">"distance_cm"</span>: 62,  <span class="s">"pitch"</span>: 3.1, <span class="s">"roll"</span>: -1.2,
+  <span class="s">"vibration"</span>: 0.04, <span class="s">"temperature"</span>: 29.4, <span class="s">"humidity"</span>: 41,
+  <span class="s">"last_event"</span>: <span class="s">"Nominal"</span>, <span class="s">"mode"</span>: <span class="s">"jev"</span> }
+<span class="c"># distance_cm and mode are two small additions to the rover's existing reply</span></pre>
+      </div></div>
+
+      <div class="hop"><div class="badge">B</div><div class="body">
+        <b>Camera watcher gets a description</b><span class="t">laptop → camera → vision AI · 1–3 s, in the background</span>
+<pre class="code"><span class="k">GET</span> http://192.168.1.43/capture        <span class="c"># returns a JPEG photo</span>
+describe(photo)                            <span class="c"># teammate's function calls the vision AI</span>
+
+{ <span class="s">"summary"</span>: <span class="s">"Chair leg about 50 cm ahead, slightly left. Open floor to the right."</span>,
+  <span class="s">"obstacle_ahead"</span>: true, <span class="s">"clear_side"</span>: <span class="s">"right"</span>, <span class="s">"hazards"</span>: [<span class="s">"cable on floor"</span>] }</pre>
+      </div></div>
+
+      <div class="hop"><div class="badge">C</div><div class="body">
+        <b>Decision maker turns numbers into words</b><span class="t">on the laptop · under 1 ms</span>
+        <p class="prose">Jev is bad at maths, so plain Python does the comparisons first and Jev only reads conclusions. "62" becomes "clear, above the 40 cm safe distance".</p>
+<pre class="code">Goal: explore the room safely.
+Distance ahead: 62 cm, clear (safe distance is 40 cm).
+Orientation: level (pitch 3°, roll -1°). Terrain: smooth.
+Camera, 0.9 s ago: chair leg about 50 cm ahead, slightly left; open floor to the right.
+Hazard: cable on floor.
+Previous move: forward for 300 ms.</pre>
+      </div></div>
+
+      <div class="hop"><div class="badge">D</div><div class="body">
+        <b>Ask Jev</b><span class="t">laptop → Jev · 70–500 ms</span>
+<pre class="code"><span class="k">POST</span> Jev API   <span class="c"># key from .env, sent in a header, never printed</span>
+{ <span class="s">"state"</span>: <span class="s">"Goal: explore the room safely. Distance ahead: 62 cm …"</span>,
+  <span class="s">"questions"</span>: {
+    <span class="s">"next_action"</span>:  { <span class="s">"type"</span>: <span class="s">"choice"</span>,
+                      <span class="s">"options"</span>: [<span class="s">"forward"</span>,<span class="s">"turn_left"</span>,<span class="s">"turn_right"</span>,<span class="s">"reverse"</span>,<span class="s">"stop"</span>] },
+    <span class="s">"path_blocked"</span>: { <span class="s">"type"</span>: <span class="s">"noul"</span>, <span class="s">"instructions"</span>: <span class="s">"Something blocks the path straight ahead"</span> } } }
+
+<span class="c"># Jev's answer</span>
+next_action:  turn_right 0.87 · forward 0.06 · turn_left 0.04 · stop 0.02 · reverse 0.01
+path_blocked: 0.81</pre>
+      </div></div>
+
+      <div class="hop"><div class="badge">E</div><div class="body">
+        <b>Safety gate checks the answer</b><span class="t">on the laptop · under 1 ms</span>
+<pre class="code">rover is in Jev mode?          yes
+telemetry fresh (&lt; 0.5 s)?      yes  (0.12 s)
+scene fresh (&lt; 3 s)?            yes  (0.9 s)
+Jev sure enough (≥ 0.60)?      yes  (0.87)
+move allowed right now?        yes  (turning is always allowed)
+→ <span class="k">APPROVED</span>: turn_right, speed 170, 300 ms</pre>
+      </div></div>
+
+      <div class="hop"><div class="badge">F</div><div class="body">
+        <b>Sender delivers the command</b><span class="t">laptop → rover · about 50 ms</span>
+<pre class="code"><span class="k">POST</span> http://192.168.1.42/jev/cmd
+X-Token: ••••••••     <span class="c"># shared secret from .env and the rover's secrets.h</span>
+{ <span class="s">"seq"</span>: 4182, <span class="s">"action"</span>: <span class="s">"turn_right"</span>, <span class="s">"speed"</span>: 170, <span class="s">"duration_ms"</span>: 300 }
+
+<span class="c"># rover replies</span>
+{ <span class="s">"ok"</span>: true, <span class="s">"seq"</span>: 4182, <span class="s">"executed"</span>: <span class="s">"turn_right"</span> }
+<span class="c"># or, if its own sensors disagree:</span>
+{ <span class="s">"ok"</span>: false, <span class="s">"seq"</span>: 4182, <span class="s">"refused"</span>: <span class="s">"obstacle_too_close"</span> }</pre>
+      </div></div>
+
+      <div class="hop"><div class="badge">G</div><div class="body">
+        <b>Logger writes it all down</b><span class="t">on the laptop</span>
+        <p class="prose">One line per decision goes into <code>runs/2026-10-04_1432.jsonl</code>: the state text, Jev's answer, what the gate decided and how the rover replied. After a run you can read exactly why every move happened.</p>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- timing -->
+  <div class="stack" id="es-timing">
+    <h3>Timing: two seconds of the Earth Station</h3>
+    <p class="prose">Each bar is a worker doing its job. Notice the yellow bars: describing a photo is slow, but it runs in its own lane, so Jev keeps deciding every half second using the most recent description.</p>
+    <div class="timeline">
+      <div class="tl">
+        <span></span>
+        <div class="axis"><span style="left:0%">0 s</span><span style="left:25%">0.5 s</span><span style="left:50%">1.0 s</span><span style="left:75%">1.5 s</span><span style="left:98%">2.0 s</span></div>
+
+        <span class="name">Sensor reader</span>
+        <div class="lane"><i class="blk" style="left:0%;width:2.5%"></i><i class="blk" style="left:10%;width:2.5%"></i><i class="blk" style="left:20%;width:2.5%"></i><i class="blk" style="left:30%;width:2.5%"></i><i class="blk" style="left:40%;width:2.5%"></i><i class="blk" style="left:50%;width:2.5%"></i><i class="blk" style="left:60%;width:2.5%"></i><i class="blk" style="left:70%;width:2.5%"></i><i class="blk" style="left:80%;width:2.5%"></i><i class="blk" style="left:90%;width:2.5%"></i></div>
+
+        <span class="name">Camera + describe</span>
+        <div class="lane"><i class="blk" style="left:0%;width:3%"></i><i class="blk slow" style="left:3%;width:52%"></i><i class="blk" style="left:56%;width:3%"></i><i class="blk slow" style="left:59%;width:41%"></i></div>
+
+        <span class="name">Ask Jev</span>
+        <div class="lane"><i class="blk jev" style="left:0%;width:9%"></i><i class="blk jev" style="left:25%;width:7%"></i><i class="blk jev" style="left:50%;width:11%"></i><i class="blk jev" style="left:75%;width:8%"></i></div>
+
+        <span class="name">Rover moving</span>
+        <div class="lane"><i class="blk go" style="left:10%;width:15%"></i><i class="blk go" style="left:33%;width:15%"></i><i class="blk go" style="left:62%;width:13%"></i><i class="blk go" style="left:84%;width:15%"></i></div>
+      </div>
+    </div>
+    <p class="prose" style="color:var(--muted);font-size:.9rem">Each move lasts at most 0.3 s, so the rover pauses briefly between moves while Jev thinks. That's deliberate: the rover never drives far on an old decision.</p>
+  </div>
+
+  <!-- gate -->
+  <div class="stack" id="es-gate">
+    <h3>Safety gate rules</h3>
+    <p class="prose">These run on the laptop before anything reaches the rover. The rover has its own checks too (distance, tilt, watchdog), so there are two layers of protection.</p>
+    <ol class="rules">
+      <li><span><b>Only drive in Jev mode.</b> If the rover says its mode isn't <code>jev</code> (you pressed a phone button), send nothing.</span></li>
+      <li><span><b>No old data.</b> Sensor numbers older than 0.5 s or a scene older than 3 s means "stop".</span></li>
+      <li><span><b>Jev must be sure.</b> If the top choice is under 60%, send "stop" instead.</span></li>
+      <li><span><b>Don't drive into what Jev itself flagged.</b> If Jev says the path is blocked (over 70%) but its top choice is "forward", send "stop".</span></li>
+      <li><span><b>Gentle limits.</b> Speed is capped (start at 170 of 255) and every move lasts at most 300 ms.</span></li>
+      <li><span><b>Errors mean stop.</b> If Jev, the camera or the rover doesn't answer in time, the next command is "stop".</span></li>
+    </ol>
+  </div>
+
+  <!-- start-up -->
+  <div class="stack" id="es-start">
+    <h3>Start-up and shut-down</h3>
+    <div class="two">
+      <div class="panel">
+        <h3><span class="who">WHEN YOU START IT</span>Pre-flight checks</h3>
+        <ol style="margin:0;padding-left:1.2em;display:grid;gap:6px">
+          <li>Load keys and addresses from <code>.env</code>. If something is missing, say which one and quit.</li>
+          <li>Ping the rover's <code>/sensors/data</code>. If there's no answer, print its address so you can check WiFi.</li>
+          <li>Grab one test photo from the camera.</li>
+          <li>Send one tiny test question to Jev to check the key works.</li>
+          <li>Open a new log file in <code>runs/</code>.</li>
+          <li>Wait. Nothing moves until you press <b>Jev Auto</b> on the phone.</li>
+        </ol>
+      </div>
+      <div class="panel">
+        <h3><span class="who">WHEN YOU STOP IT</span>Clean landing</h3>
+        <ol style="margin:0;padding-left:1.2em;display:grid;gap:6px">
+          <li>You press <code>Ctrl+C</code>.</li>
+          <li>It sends "stop" to the rover right away.</li>
+          <li>It closes the log file and prints a summary: number of decisions, average Jev time, how many moves the rover refused.</li>
+          <li>Even if the laptop crashes without doing this, the rover's watchdog stops it within 1.5 s.</li>
+        </ol>
+      </div>
+    </div>
+    <p class="prose"><b>Suggest-only mode:</b> start it with <code>--suggest</code> and it does everything except step F. It prints what it <i>would</i> send while you drive by phone. That's the safe way to see how Jev behaves before letting it drive.</p>
+  </div>
+
+  <!-- screen -->
+  <div class="stack" id="es-screen">
+    <h3>What you'll see in the terminal</h3>
+<pre class="console"><span class="d">$</span> python -m earth_station
+<span class="b">Earth Station</span> · pre-flight
+  <span class="g">✓</span> .env loaded (rover 192.168.1.42, camera 192.168.1.43)
+  <span class="g">✓</span> rover answering · mode MANUAL · 62 cm clear
+  <span class="g">✓</span> camera answering · 38 KB photo
+  <span class="g">✓</span> Jev key valid · 141 ms
+  <span class="g">✓</span> logging to runs/2026-10-04_1432.jsonl
+<span class="y">… waiting for Jev Auto (press it on the rover's AP page)</span>
+
+<span class="d">14:32:05.010</span> mode → <span class="b">JEV_AUTO</span>
+<span class="d">14:32:05.020</span> scene  "open floor ahead, wall far right"
+<span class="d">14:32:05.190</span> #4180  forward     <span class="g">0.91</span>  → sent · ok
+<span class="d">14:32:05.690</span> #4181  forward     <span class="g">0.84</span>  → sent · ok
+<span class="d">14:32:06.540</span> scene  "chair leg ~50 cm ahead, left; open floor right"
+<span class="d">14:32:07.420</span> #4182  turn_right  <span class="g">0.87</span>  → sent · ok
+<span class="d">14:32:07.930</span> #4183  forward     <span class="y">0.52</span>  → <span class="y">gate: unsure, sent stop</span>
+<span class="d">14:32:08.410</span> #4184  forward     <span class="g">0.78</span>  → sent · <span class="r">rover refused: obstacle_too_close</span>
+<span class="d">14:32:08.900</span> #4185  turn_left   <span class="g">0.81</span>  → sent · ok
+<span class="d">14:32:09.300</span> mode → <span class="b">MANUAL</span> (phone button) · Earth Station paused
+^C
+<span class="d">stop sent · 6 decisions · avg Jev 168 ms · 1 refused · log saved</span></pre>
+  </div>
+
+  <!-- files -->
+  <div class="stack" id="es-files">
+    <h3>Files and settings</h3>
+    <div class="two">
+      <div class="stack">
+        <p>The folder in the repo, with one small file per job so you and your teammate don't edit the same file. Setup on any laptop is one command; see <code>docs/EARTH_STATION.md</code>.</p>
+<pre class="tree">earth_station/
+├── __main__.py      <span class="c"># starts everything, pre-flight checks</span>
+├── config.py        <span class="c"># reads .env</span>
+├── station.py       <span class="c"># the workers and the decision cycle</span>
+├── whiteboard.py    <span class="c"># the shared notebook</span>
+├── links.py         <span class="c"># talks to the rover and camera</span>
+├── describe.py      <span class="c"># TEAMMATE: photo → description</span>
+├── state_text.py    <span class="c"># numbers → plain words</span>
+├── jev_client.py    <span class="c"># asks Jev (or a mock, offline)</span>
+├── safety_gate.py   <span class="c"># the six rules</span>
+├── logger.py        <span class="c"># screen + runs/*.jsonl</span>
+├── sim.py           <span class="c"># fake rover + camera for testing</span>
+└── drive.py         <span class="c"># send one move by hand</span>
+scripts/setup.ps1    <span class="c"># one-command setup (Windows)</span>
+scripts/setup.sh     <span class="c"># one-command setup (Mac/Linux)</span>
+runs/                <span class="c"># logs (git-ignored)</span></pre>
+      </div>
+      <div class="stack">
+        <p>Everything you might want to change lives in <code>.env</code> on the laptop. It's git-ignored, so keys never reach GitHub:</p>
+<pre class="tree"><span class="c"># addresses on your router</span>
+ROVER_URL=http://192.168.1.42
+CAMERA_URL=http://192.168.1.43
+
+<span class="c"># secrets</span>
+JEV_API_KEY=…
+VISION_API_KEY=…
+ROVER_CMD_TOKEN=…     <span class="c"># same value as in rover secrets.h</span>
+
+<span class="c"># behaviour</span>
+DECIDE_EVERY_MS=500
+MIN_CONFIDENCE=0.60
+MAX_SPEED=170
+MOVE_MS=300
+GOAL=explore the room safely</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- code -->
+  <div class="stack" id="es-code">
+    <h3>The main loop in code</h3>
+    <p class="prose">This is simplified, but it's close to the real thing. Even if you're new to Python you can follow it: read the whiteboard, describe the situation, ask Jev, check, send, log, wait, repeat.</p>
+<pre class="code"><span class="k">async def</span> decision_loop(board, rover, jev, gate, log):
+    <span class="k">while True</span>:
+        <span class="k">if</span> board.mode == <span class="s">"jev"</span>:                          <span class="c"># only when you pressed Jev Auto</span>
+            text   = state_text.build(board)                <span class="c"># numbers → words</span>
+            answer = <span class="k">await</span> jev.ask(text)                    <span class="c"># "turn_right 0.87"</span>
+            move   = gate.check(answer, board)              <span class="c"># may turn it into "stop"</span>
+            reply  = <span class="k">None</span>
+            <span class="k">if not</span> settings.suggest_only:
+                reply = <span class="k">await</span> rover.send(move)               <span class="c"># POST /jev/cmd</span>
+            log.decision(text, answer, move, reply)
+        <span class="k">await</span> asyncio.sleep(settings.decide_every)          <span class="c"># 0.5 s</span></pre>
+  </div>
+</section>
+
+<!-- MODES & NETWORK -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Who is in charge</div>
+    <h2>Three driving modes, and your phone always wins</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Mode</th><th>Who drives</th><th>How you turn it on</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><b>Manual</b></td><td>You, from the phone</td><td>"Manual Propulsion" on the rover's AP page</td><td><span class="pill good">exists today</span></td></tr>
+        <tr><td><b>Autonomy</b></td><td>The rover alone, dodging walls with its ultrasonic sensor</td><td>"Initiate Autonomy" button</td><td><span class="pill good">exists today</span></td></tr>
+        <tr><td><b>Jev Auto</b></td><td>The laptop + Jev</td><td>New "Jev Auto" button on the same AP page</td><td><span class="pill warn">new</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose">Pressing any button on the phone switches Jev Auto off at once, so you can always take control back.</p>
+
+  <div class="stack prose">
+    <h3>How the WiFi fits together</h3>
+    <p>Each board does two WiFi jobs at the same time, and it already works this way today:</p>
+    <ul style="margin:0;padding-left:1.2em;display:grid;gap:6px">
+      <li><b>It joins your router</b> (called <i>station mode</i>). That's how the laptop reaches it and how it reaches the internet.</li>
+      <li><b>It creates its own small WiFi</b> (called <i>AP mode</i>). That's how your phone connects directly to its control page.</li>
+    </ul>
+  </div>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph Home["Your router's WiFi"]
+    L["Laptop: Earth Station"]
+    R["Rover"]
+    C["Camera"]
+  end
+  Home --> NET(("Internet: Vision AI + Jev"))
+  P1["Phone"] -->|"joins ESP32-Car-AP"| R
+  P2["Phone"] -->|"joins ESP32_CAM_MARS"| C
+</pre>
+  </div>
+  <div class="callout warn prose">
+    <b>One thing to fix first</b>
+    <p>Right now the rover and the camera join <i>different</i> routers. For this plan, the rover, the camera and the laptop must all be on the <b>same</b> router. That only means changing <code>WIFI_SSID</code> and <code>WIFI_PASS</code> in one <code>secrets.h</code>.</p>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">What if something goes wrong</div>
+    <h2>Built to fail safely</h2>
+    <p>AI can be wrong and WiFi can drop. The rule is simple: <b>when in doubt, the rover stops.</b></p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>What happens</th><th>What the rover does</th></tr></thead>
+      <tbody>
+        <tr><td>Jev says "forward" but a wall is 15 cm away</td><td>Refuses. Its own distance sensor overrules Jev.</td></tr>
+        <tr><td>Rover tilts more than 35°</td><td>Stops the motors.</td></tr>
+        <tr><td>WiFi drops, or the laptop crashes</td><td>Gets no command for 1.5 s, so it stops by itself (a "watchdog" timer).</td></tr>
+        <tr><td>Jev isn't sure (under 60%)</td><td>The laptop sends "stop" instead of guessing.</td></tr>
+        <tr><td>Someone else on the WiFi tries to send commands</td><td>Rejected. Commands need a secret token only the laptop knows.</td></tr>
+        <tr><td>You press a button on the phone</td><td>Leaves Jev Auto immediately and does what you pressed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- WHO BUILDS WHAT -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Splitting the work</div>
+    <h2>Who builds what</h2>
+    <p>You can each work on your own part without waiting for the other. You only need to agree on the format of the photo description (below).</p>
+  </div>
+  <div class="two">
+    <div class="panel">
+      <h3><span class="who">YOU</span>Rover + the brain</h3>
+      <ul class="check">
+        <li>Add a "Jev Auto" button to the rover's AP page</li>
+        <li>Add a <code>/jev/cmd</code> page on the rover that accepts a move (with the secret token)</li>
+        <li>Add the watchdog and the safety refusals</li>
+        <li>Write the Earth Station Python program: read sensors, ask Jev, send moves</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3><span class="who">TEAMMATE</span>The eyes</h3>
+      <ul class="check">
+        <li>Move the camera to the same router</li>
+        <li>Write a Python function: photo in → short description out</li>
+        <li>Test it on 20–30 saved photos before connecting it</li>
+        <li>Keep descriptions short; Jev works best with brief input</li>
+      </ul>
+    </div>
+  </div>
+  <div class="stack">
+    <h3>The one thing you must agree on: what a description looks like</h3>
+    <div class="diagram" style="padding:0">
+<pre style="margin:0;padding:16px;font-family:var(--mono);font-size:.85rem;line-height:1.6;overflow-x:auto;color:var(--fg)">{
+  "summary": "Chair leg about 50 cm ahead, slightly left. Open floor to the right.",
+  "obstacle_ahead": true,
+  "clear_side": "right",        // left, right, both or none
+  "hazards": ["cable on floor"]
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- BUILD ORDER -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Build order</div>
+    <h2>Four steps, each one testable</h2>
+    <p>Each step works on its own before you start the next, so if something breaks you know exactly where.</p>
+  </div>
+  <div class="phases">
+    <div class="phase"><span class="eyebrow">Step 1 · No AI yet</span><b>Remote control from the laptop</b><span>Add <code>/jev/cmd</code>, the watchdog and the Jev Auto button. Drive the rover with a small Python script that sends "forward, left, stop". If this works, the plumbing works.</span></div>
+    <div class="phase"><span class="eyebrow">Step 2 · Teammate, in parallel</span><b>Photo descriptions</b><span>The describe function works on saved photos and returns the agreed format.</span></div>
+    <div class="phase"><span class="eyebrow">Step 3 · Jev watches, you drive</span><b>"Suggest only" mode</b><span>Connect everything, but only <i>print</i> what Jev would do while you drive by phone. You'll learn how Jev thinks, safely.</span></div>
+    <div class="phase"><span class="eyebrow">Step 4 · Jev drives</span><b>Turn on Jev Auto</b><span>Let the commands reach the motors, at low speed at first, in an open room.</span></div>
+  </div>
+</section>
+
+<!-- HYBRID -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Later: the hybrid upgrade</div>
+    <h2>Add a planner that sets goals</h2>
+    <p>Jev is quick but short-sighted: it picks the next move and nothing more. Once the loop drives well, add a second, slower AI (such as Claude) to the same laptop program. Every 15 seconds or so it looks at the recent descriptions and sensor history and sets a <b>goal</b>, such as "explore the open area on the right, stay away from the chair". That goal goes into the words Jev reads, so Jev's quick moves start heading somewhere. The same planner can also write a mission report, which is what the old n8n workflow used to do.</p>
+  </div>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  PL["Planner AI, every ~15 s: sets the goal"] --> J["Jev, twice a second: picks the move"]
+  J --> RF["Rover reflexes, always: can refuse"]
+  RF --> M["Motors"]
+</pre>
+  </div>
+  <p class="prose">It's the same laptop and the same rover. Only the Python program grows.</p>
+</section>
+
+<!-- BEFORE WE START -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Before we start building</div>
+    <h2>What you need</h2>
+  </div>
+  <div class="two">
+    <div class="panel"><h3>Jev access</h3><p>Sign up with Typesafe AI and get an API key. It goes in the laptop's <code>.env</code> file, never in the code or on the rover.</p></div>
+    <div class="panel"><h3>A vision AI</h3><p>Your teammate picks one, for example Claude or Gemini, and gets its API key. It also goes in <code>.env</code>.</p></div>
+    <div class="panel"><h3>Python on the laptop</h3><p>You already have Python 3.12. The Earth Station will live in a new <code>earth_station/</code> folder in the repo.</p></div>
+    <div class="panel"><h3>One router for all</h3><p>Rover, camera and laptop on the same WiFi, as noted above.</p></div>
+  </div>
+</section>
+
+<!-- GLOSSARY -->
+<section class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Words used on this page</div>
+    <h2>Glossary</h2>
+  </div>
+  <dl class="gloss">
+    <dt>AP mode</dt><dd>The board makes its own WiFi network that your phone can join directly. No router needed.</dd>
+    <dt>Station mode</dt><dd>The board joins an existing WiFi (your router), like a phone does.</dd>
+    <dt>Endpoint</dt><dd>A web address on a board that does one job, such as <code>/sensors/data</code> (gives numbers) or <code>/capture</code> (gives a photo).</dd>
+    <dt>API</dt><dd>A way for one program to ask another for something over the internet. Jev and the vision AI are used through their APIs.</dd>
+    <dt>API key</dt><dd>A password that proves you're allowed to use an API. Keep it secret; it stays in <code>.env</code> on the laptop.</dd>
+    <dt>Telemetry</dt><dd>The stream of sensor numbers the rover reports: distance, tilt, temperature and so on.</dd>
+    <dt>Latency</dt><dd>How long you wait for an answer. Jev takes about 0.1–0.5 s.</dd>
+    <dt>Watchdog</dt><dd>A timer on the rover. If no command arrives in time, it assumes something broke and stops the motors.</dd>
+    <dt>Confidence</dt><dd>How sure Jev is about its answer, from 0% to 100%.</dd>
+    <dt>Token</dt><dd>A shared secret the laptop sends with each command, so the rover knows the command is genuine.</dd>
+  </dl>
+</section>
+
+<footer>
+  Jev details come from third-party write-ups (width.ai, MindStudio). Confirm the request format and pricing in Typesafe AI's own docs when you sign up. Timings on this page are estimates.
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var svg = document.getElementById('dia');
+  var btns = Array.prototype.slice.call(document.querySelectorAll('#steps button'));
+  var parts = Array.prototype.slice.call(svg.querySelectorAll('[data-s]'));
+  var timer = null, current = 0;
+
+  function show(n) {
+    current = n;
+    if (!n) {
+      svg.classList.remove('active');
+    } else {
+      svg.classList.add('active');
+    }
+    parts.forEach(function (el) {
+      var list = el.getAttribute('data-s').split(' ');
+      el.classList.toggle('on', list.indexOf(String(n)) !== -1);
+    });
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', String(+b.dataset.step === n)); });
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; document.getElementById('play').textContent = 'Play'; } }
+
+  btns.forEach(function (b) { b.addEventListener('click', function () { stop(); show(+b.dataset.step); }); });
+  document.getElementById('all').addEventListener('click', function () { stop(); show(0); });
+  document.getElementById('play').addEventListener('click', function () {
+    if (timer) { stop(); return; }
+    this.textContent = 'Pause';
+    show(current >= 7 || current === 0 ? 1 : current + 1);
+    timer = setInterval(function () { show(current >= 7 ? 1 : current + 1); }, 1800);
+  });
+  show(0);
+})();
+</script>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral" });
+</script>
+</body>
+</html>

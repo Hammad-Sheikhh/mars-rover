@@ -7,6 +7,8 @@
 
 A two-board Mars rover. The main ESP32 drives the rover, avoids obstacles and logs sensor telemetry to Supabase. A separate ESP32-CAM captures images and uploads them to Supabase Storage. Each board also hosts its own WiFi access point with a local control/viewing page.
 
+The **Earth Station** is a Python program on a laptop that lets the **Jev** AI drive the rover (*Jev Auto* mode), using the rover's telemetry and a description of what the camera sees.
+
 ---
 
 ## 🏗 System Architecture
@@ -21,6 +23,13 @@ graph TD
 
     Phone1((Operator)) -->|AP: ESP32-Car-AP| ESP
     Phone2((Operator)) -->|AP: ESP32_CAM_MARS| CAM
+
+    subgraph Laptop
+        ES[Earth Station] <-->|next move| JEV[Jev AI]
+    end
+    ESP -->|/sensors/data| ES
+    CAM -->|/capture| ES
+    ES -->|/jev/cmd| ESP
 ```
 
 ## ✅ Current Status
@@ -32,6 +41,8 @@ graph TD
 | Supabase database + storage | ✅ Working |
 | AP mode — rover control page | ✅ Working |
 | AP mode — camera live view | ✅ Working |
+| Earth Station (`earth_station/`) | 🧪 Runs on the simulator; rover firmware for Jev Auto is next |
+| Photo descriptions (`describe.py`) | 🚧 Teammate, in progress |
 
 ---
 
@@ -52,6 +63,14 @@ graph TD
 *   **AP Mode** (`ESP32_CAM_MARS`): Live view page at `http://192.168.4.1`, refreshing every 3 seconds.
 *   **Cloud Uplink**: Uploads a JPEG to the `rover_images` bucket every 10 seconds and saves its public URL in `camera_captures`.
 
+### 🛰 Earth Station (`earth_station/`)
+*   **Jev Auto**: twice a second, reads telemetry, reads the latest camera description, asks Jev for the next move and sends it to the rover.
+*   **Two safety layers**: laptop-side gate (confidence, stale data, blocked path) plus the rover's own reflexes and watchdog.
+*   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
+*   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
+
+Full guide: [docs/EARTH_STATION.md](docs/EARTH_STATION.md). Design walkthrough: open [docs/design/earth-station-plan.html](docs/design/earth-station-plan.html) in a browser.
+
 ---
 
 ## 📂 Project Structure
@@ -64,11 +83,17 @@ mars-rover/
 ├── cam1/
 │   ├── cam1.ino              # 👁 Camera firmware (ESP32-CAM)
 │   └── secrets.example.h     # Credential template -> copy to secrets.h
+├── earth_station/            # 🛰 Laptop ground station (Python) + rover simulator
+├── tests/                    # Earth Station tests (pytest)
+├── scripts/                  # One-command setup: setup.ps1 (Windows), setup.sh (Mac/Linux)
 ├── docs/
 │   ├── ARCHITECTURE.md       # Design, data model, pin map, security model
+│   ├── EARTH_STATION.md      # Earth Station guide + rover protocol
+│   ├── design/               # Design pages (open in a browser)
 │   └── supabase/schema.sql   # Tables + row-level security policies
 ├── .github/                  # CI (compile + secret scan), PR/issue templates
-├── .env.example              # Reference list of credentials / endpoints
+├── pyproject.toml            # Earth Station package + tools
+├── .env.example              # Credentials / endpoints / Earth Station settings
 ├── CLAUDE.md                 # Guide for Claude Code / contributors
 ├── CONTRIBUTING.md
 ├── SECURITY.md
@@ -106,6 +131,22 @@ Requires **ESP32 Arduino core 3.x** (uses the pin-based `ledcAttach` API).
 
 Keep the rover still while it powers on, because the gyro calibrates at boot.
 
+### 4. Earth Station (any laptop, Python 3.11+)
+
+```sh
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+.\.venv\Scripts\Activate.ps1
+
+# macOS / Linux
+sh scripts/setup.sh
+. .venv/bin/activate
+
+python -m earth_station --sim     # try it with the built-in fake rover
+```
+
+See [docs/EARTH_STATION.md](docs/EARTH_STATION.md) to connect the real rover.
+
 ---
 
 ## 🤝 Contributing & Security
@@ -133,6 +174,7 @@ Keep the rover still while it powers on, because the gyro calibrates at boot.
 *   **Hardware**: ESP32, ESP32-CAM, MPU6050, BMP280, DHT11, HC-SR04, LDR module, L298N-style motor driver.
 *   **Firmware**: C++ (Arduino framework).
 *   **Backend**: Supabase (PostgreSQL + Storage).
+*   **Earth Station**: Python 3.11+, `httpx`, Jev (Typesafe AI); `pytest` + `ruff`.
 
 ---
 

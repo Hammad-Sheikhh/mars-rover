@@ -1,0 +1,193 @@
+# Earth Station
+
+A Python program on a laptop that lets **Jev** drive the rover. About twice a second it reads the rover's sensors, looks at the latest camera description, asks Jev for the next move, checks it against the safety rules, and sends it to the rover.
+
+Both AP control pages keep working the whole time. Any button pressed on the phone takes the rover out of Jev Auto, and the Earth Station goes quiet.
+
+The design pages in [`docs/design/`](design/) explain the idea with diagrams. Open them in a browser.
+
+---
+
+## Set up on any laptop
+
+You need **Python 3.11+** and **git**. Nothing else: no rover, Jev account or internet is needed to try it.
+
+```sh
+git clone https://github.com/Hammad-Sheikhh/mars-rover.git
+cd mars-rover
+```
+
+| Windows (PowerShell) | macOS / Linux |
+|---|---|
+| `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1` | `sh scripts/setup.sh` |
+| `.\.venv\Scripts\Activate.ps1` | `. .venv/bin/activate` |
+
+The setup script:
+1. finds Python 3.11+
+2. creates a private environment in `.venv/`
+3. installs the Earth Station and its test tools
+4. creates `.env` from `.env.example`, unless you already have one
+
+Run the setup again any time to pick up new dependencies.
+
+## Try it with the simulator
+
+```sh
+python -m earth_station --sim
+```
+
+This starts a fake rover and a fake camera inside the program and lets the mock Jev drive. You should see something like:
+
+```
+Earth Station pre-flight
+  OK  rover http://127.0.0.1:52811 | camera http://127.0.0.1:52812
+  OK  Jev mock | describe mock
+  OK  rover answering | mode jev | distance 150 cm
+  OK  camera answering | 0.1 KB | "Open floor ahead, nothing close."
+  OK  Jev answering | 0 ms
+  OK  logging to runs/2026-10-04_232152.jsonl
+rover already in Jev Auto
+23:21:52.786 #1     forward     0.92  -> sent, rover ok
+23:21:55.827 scene  "Cardboard box about 74 cm ahead. Open floor to the right."
+23:21:56.312 #7     turn_right  0.91  -> sent, rover ok
+```
+
+Press `Ctrl+C` to stop. It sends a final `stop` to the rover and prints a summary.
+
+To act as "the phone" while it runs, start the simulator on its own:
+
+```sh
+python -m earth_station.sim                    # terminal 1: fake rover :8081, camera :8082
+python -m earth_station                        # terminal 2: uses the defaults in .env
+curl "http://127.0.0.1:8081/mode?set=manual"   # terminal 3: press a phone button
+curl "http://127.0.0.1:8081/mode?set=jev"      #             press Jev Auto again
+```
+
+## Run it with the real rover
+
+1. Put the rover, the camera and the laptop on **the same WiFi router**. Set `WIFI_SSID` and `WIFI_PASS` in both `secrets.h` files.
+2. Flash rover firmware that has Jev support. It must follow the [rover protocol](#rover-protocol) below.
+3. In `.env`, set `ROVER_URL` and `CAMERA_URL` to the IP addresses each board prints on the Serial monitor at boot, and set `ROVER_CMD_TOKEN` to the same value as in `rover1/secrets.h`.
+4. Start in **suggest-only** mode first. It decides and logs, but never moves the rover:
+   ```sh
+   python -m earth_station --suggest
+   ```
+5. Press **Jev Auto** on the rover's AP page and watch what Jev would do while you drive by hand.
+6. When you trust it, run `python -m earth_station` and let it drive, slowly and in an open space.
+
+To test the link without any AI (build step 1), send single moves by hand:
+
+```sh
+python -m earth_station.drive forward
+python -m earth_station.drive turn_left --ms 300 --speed 150
+python -m earth_station.drive stop
+```
+
+## Settings (`.env`)
+
+Every setting has a working default for the simulator. See `.env.example` for the full list.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ROVER_URL` / `CAMERA_URL` | `http://127.0.0.1:8081` / `:8082` | Board addresses on your router |
+| `ROVER_CMD_TOKEN` | `sim-token` | Shared secret for `/jev/cmd`. Must match the rover's `secrets.h` |
+| `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_URL`, `JEV_API_KEY`) |
+| `DESCRIBE_MODE` | `mock` | `mock` or `live` (the teammate's vision model, needs `VISION_API_KEY`) |
+| `DECIDE_EVERY_MS` | `500` | How often Jev is asked |
+| `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
+| `MAX_SPEED` / `MOVE_MS` | `170` / `300` | Speed cap (0–255) and length of each move |
+| `GOAL` | `explore the room safely` | Put into every message Jev reads |
+
+Keys live only in `.env`, which is git-ignored. Never put them in code.
+
+## How it works
+
+```mermaid
+flowchart LR
+  R["Rover /sensors/data"] -->|every 0.2 s| SR["Sensor reader"]
+  C["Camera /capture"] -->|every 1.5 s| CW["Camera watcher + describe"]
+  SR --> WB[("Whiteboard")]
+  CW --> WB
+  WB --> DM["Decision maker: words -> Jev -> safety gate"]
+  DM -->|"POST /jev/cmd"| R2["Rover"]
+  DM --> LG["Logger: screen + runs/*.jsonl"]
+```
+
+| File | Job |
+|---|---|
+| `earth_station/__main__.py` | Command line, pre-flight, clean shutdown |
+| `earth_station/station.py` | The workers and the decision cycle |
+| `earth_station/whiteboard.py` | Shared notebook, with a timestamp on every value |
+| `earth_station/links.py` | HTTP to the rover and camera |
+| `earth_station/describe.py` | **Teammate:** photo → short description |
+| `earth_station/state_text.py` | Numbers → plain words for Jev |
+| `earth_station/jev_client.py` | Jev API client, plus the mock policy |
+| `earth_station/safety_gate.py` | The six laptop-side safety rules |
+| `earth_station/logger.py` | Console output and the JSONL run log |
+| `earth_station/sim.py` | Fake rover and camera |
+| `earth_station/drive.py` | Send one move by hand |
+
+### Safety gate rules
+
+1. Only drive when the rover reports `mode: "jev"`. Otherwise send nothing.
+2. Telemetry older than 0.5 s, or a scene older than 3 s, means `stop`.
+3. Jev under `MIN_CONFIDENCE` means `stop`.
+4. Jev chooses `forward` but itself says the path is blocked: `stop`.
+5. Speed is capped at `MAX_SPEED`, and each move lasts `MOVE_MS` (max 500).
+6. Any error (Jev, camera or rover) means `stop`.
+
+The rover has its own second layer: the obstacle and tilt vetoes, and the watchdog.
+
+### Run logs
+
+Each run writes `runs/<date>_<time>.jsonl`, one JSON object per line: every decision with the exact text Jev read, its answer, the gate's verdict and the rover's reply. `runs/` is git-ignored.
+
+## Rover protocol
+
+This is the contract the rover firmware must implement for Jev Auto. The simulator (`earth_station/sim.py`) already follows it, so use it as the reference.
+
+**`GET /sensors/data`**: the existing reply, plus two fields:
+
+```json
+{ "distance_cm": 62, "mode": "jev", "pitch": 3.1, "roll": -1.2, "vibration": 0.04,
+  "last_event": "Nominal", "temperature": 29.4, "humidity": 41, "...": "..." }
+```
+
+* `distance_cm`: latest ultrasonic median, or `-1` if there's no echo.
+* `mode`: `"manual"`, `"autonomy"` or `"jev"`. If the field is missing, the Earth Station treats the rover as manual and never drives it.
+
+**`POST /jev/cmd`**: header `X-Token: <ROVER_CMD_TOKEN>`, body:
+
+```json
+{ "seq": 4182, "action": "turn_right", "speed": 170, "duration_ms": 300 }
+```
+
+| Reply | When |
+|---|---|
+| `200 {"ok": true, "seq": 4182, "executed": "turn_right"}` | Move started |
+| `200 {"ok": false, "seq": 4182, "refused": "not_in_jev_mode"}` | Rover isn't in Jev Auto |
+| `200 {"ok": false, "seq": 4182, "refused": "obstacle_too_close"}` | Forward requested under 20 cm |
+| `200 {"ok": false, "seq": 4182, "refused": "tilt"}` | Pitch or roll over 35° |
+| `401 {"ok": false, "refused": "bad_token"}` | Wrong or missing token |
+
+Rover rules:
+* `action` must be one of `forward`, `turn_left`, `turn_right`, `reverse`, `stop`. Clamp `speed` to 0–255 and `duration_ms` to 0–500.
+* Ignore a command whose `seq` equals the last one (a retry). Forget the last `seq` when Jev Auto is switched on.
+* **Watchdog:** in Jev Auto, if no command has arrived for 1.5 s, stop the motors.
+* Run moves without `delay()`. Track the end time with `millis()` so the web server stays responsive.
+* Any manual button press (`/startnav`, `/startstop`) leaves Jev Auto.
+
+## Tests
+
+```sh
+pytest           # 26 tests: safety rules, wording, parsing, full loop on the simulator
+ruff check .     # lint
+```
+
+CI runs both on every pull request.
+
+## Not done yet
+
+* **Rover firmware** for the protocol above. It's the next PR.
+* **`describe.py` live mode**, for the teammate. Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.
+* **Live Jev.** The request shape follows public write-ups. Confirm the field names in Typesafe's docs. If parsing fails, only `_parse_choice` and `_parse_noul` in `jev_client.py` need changing.
