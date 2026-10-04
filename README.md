@@ -59,11 +59,20 @@ graph TD
 ```text
 mars-rover/
 ├── rover1/
-│   └── rover1.ino      # 🤖 Main rover firmware (ESP32)
+│   ├── rover1.ino            # 🤖 Main rover firmware (ESP32)
+│   └── secrets.example.h     # Credential template -> copy to secrets.h
 ├── cam1/
-│   └── cam1.ino        # 👁 Camera firmware (ESP32-CAM)
-├── .env.example        # Template for credentials / API endpoints
-└── README.md
+│   ├── cam1.ino              # 👁 Camera firmware (ESP32-CAM)
+│   └── secrets.example.h     # Credential template -> copy to secrets.h
+├── docs/
+│   ├── ARCHITECTURE.md       # Design, data model, pin map, security model
+│   └── supabase/schema.sql   # Tables + row-level security policies
+├── .github/                  # CI (compile + secret scan), PR/issue templates
+├── .env.example              # Reference list of credentials / endpoints
+├── CLAUDE.md                 # Guide for Claude Code / contributors
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── CHANGELOG.md
 ```
 
 ---
@@ -71,20 +80,39 @@ mars-rover/
 ## 🚀 Quick Start
 
 ### 1. Supabase Setup
-1.  **Table `sensor_readings`**: columns `temperature`, `humidity`, `ldr_state`, `pressure`, `altitude`, `pitch`, `roll`, `vibration`, `last_event`.
-2.  **Table `camera_captures`**: column `image_url`.
-3.  **Storage**: create a public bucket `rover_images`.
+Run [`docs/supabase/schema.sql`](docs/supabase/schema.sql) in the Supabase SQL editor. It creates:
+*   **`sensor_readings`**: `temperature`, `humidity`, `ldr_state`, `pressure`, `altitude`, `pitch`, `roll`, `vibration`, `last_event`
+*   **`camera_captures`**: `image_url`
+*   **Storage bucket `rover_images`** (public)
+*   **Row-level security**: the device (anon) key can only insert, never update or delete.
 
 ### 2. Credentials
-Copy `.env.example` to `.env` and fill in your values for reference. The firmware does not read `.env` yet. Set the same values at the top of each `.ino` file.
+Credentials never go in git. Each sketch reads them from a local, git-ignored `secrets.h`:
+
+```sh
+cp rover1/secrets.example.h rover1/secrets.h
+cp cam1/secrets.example.h  cam1/secrets.h
+```
+
+Fill in the WiFi network, AP password and Supabase URL + **anon** key. Never use the `service_role` key on a device.
 
 ### 3. Firmware Deployment
 Requires **ESP32 Arduino core 3.x** (uses the pin-based `ledcAttach` API).
 
-*   **Rover**: Open `rover1/rover1.ino`, set WiFi and Supabase credentials, upload.
+*   **Rover**: Open `rover1/rover1.ino` and upload with board **ESP32 Dev Module**.
     *   Libraries: `Adafruit BMP280`, `Adafruit Unified Sensor`, `DHT sensor library`, `MPU6050_tockn`.
     *   I2C: SDA 25, SCL 26.
-*   **Camera**: Open `cam1/cam1.ino`, set WiFi and Supabase credentials, upload with board **AI Thinker ESP32-CAM** and PSRAM enabled.
+*   **Camera**: Open `cam1/cam1.ino` and upload with board **AI Thinker ESP32-CAM** (PSRAM enabled).
+
+Keep the rover still while it powers on, because the gyro calibrates at boot.
+
+---
+
+## 🤝 Contributing & Security
+
+*   Workflow, branch naming and commit style: [CONTRIBUTING.md](CONTRIBUTING.md)
+*   System design and known gaps: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+*   Reporting vulnerabilities: [SECURITY.md](SECURITY.md). Please don't open public issues for these.
 
 ---
 
