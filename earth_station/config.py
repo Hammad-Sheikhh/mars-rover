@@ -28,6 +28,7 @@ class Settings:
     jev_mode: str  # "mock" (offline rules) or "live" (real Jev API)
     jev_api_url: str
     jev_api_key: str
+    jev_model: str
 
     describe_mode: str  # "mock" or "live" (teammate's vision AI)
     vision_api_key: str
@@ -78,8 +79,9 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         camera_url=_str("CAMERA_URL", "http://127.0.0.1:8082").rstrip("/"),
         rover_cmd_token=_str("ROVER_CMD_TOKEN", "sim-token"),
         jev_mode=_str("JEV_MODE", "mock").lower(),
-        jev_api_url=_str("JEV_API_URL", ""),
+        jev_api_url=_str("JEV_API_URL", "https://api.typesafe.ai/v1/systemone"),
         jev_api_key=_str("JEV_API_KEY", ""),
+        jev_model=_str("JEV_MODEL", "jev-latest"),
         describe_mode=_str("DESCRIBE_MODE", "mock").lower(),
         vision_api_key=_str("VISION_API_KEY", ""),
         telemetry_every_ms=_int("TELEMETRY_EVERY_MS", 200),
@@ -106,8 +108,10 @@ def validate(s: Settings) -> None:
         raise ConfigError(f"JEV_MODE must be 'mock' or 'live', got {s.jev_mode!r}")
     if s.describe_mode not in ("mock", "live"):
         raise ConfigError(f"DESCRIBE_MODE must be 'mock' or 'live', got {s.describe_mode!r}")
-    if s.jev_mode == "live" and not (s.jev_api_key and s.jev_api_url):
-        raise ConfigError("JEV_MODE=live needs JEV_API_URL and JEV_API_KEY in .env")
+    if s.jev_mode == "live" and not s.jev_api_key:
+        raise ConfigError(
+            "JEV_MODE=live needs JEV_API_KEY in .env (get one at https://console.typesafe.ai/keys)"
+        )
     if s.describe_mode == "live" and not s.vision_api_key:
         raise ConfigError("DESCRIBE_MODE=live needs VISION_API_KEY in .env")
     if not s.rover_cmd_token:

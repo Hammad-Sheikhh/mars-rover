@@ -22,7 +22,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover code for "Jev Auto" mode | ⏳ Milestone 3 (leader writes it, teammate tests it) |
 | Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
 | Mission control page in the browser | ⏳ Milestone 6 |
-| Real Jev connection | ⏳ Needs a Jev account and key |
+| Real Jev connection | ✅ Code ready and tested against TypeSafe's docs. Waiting for a key ($5 of credits) |
 
 **Who has what:** the teammate has the physical rover and camera. The project leader (repo owner) works on the laptop side.
 
@@ -46,7 +46,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 The full build order is in `SPEC.md` section 6.
 
 1. Merge the spec pull request (milestone 0).
-2. **Live Jev first** (milestone 7): get a key at console.typesafe.ai/keys and connect it.
+2. **Real Jev:** the code is ready. Buy $5 of credits at console.typesafe.ai (the minimum, about 40 hours of driving), create a key, and put it in `.env` with `JEV_MODE=live`.
 3. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators).
 4. Milestone 1: easy setup (one place for the hotspot details, automatic rover token, `--check` command).
 5. Milestone 3: rover code for Jev Auto, so the teammate has something to test.
@@ -64,8 +64,10 @@ The full build order is in `SPEC.md` section 6.
 3. **Wrote `SPEC.md`**: the goal, a glossary, who does what, requirements, the target setup procedure and 9 milestones in build order.
 4. **Added to `CLAUDE.md`**: follow the spec, work without the rover (simulator first, a hardware checklist for the teammate in firmware PRs), and teach as we build.
 5. **Rewrote the README's laptop setup** as numbered beginner steps, and linked the spec.
+6. **Connected the code to the real Jev** using TypeSafe's official docs. The old code listed the moves in the wrong field. Fixed, and 6 tests added. A key needs at least $5 of credits, about 40 hours of driving at 2 questions a second. The leader will buy credits later, so we use the pretend Jev for now.
 
 **Things to remember**
+- Real Jev: put the key in `.env` (`JEV_API_KEY`) and set `JEV_MODE=live`. Never paste it in chat or code. `DECIDE_EVERY_MS=1000` halves the cost.
 - The leader has no rover right now, so laptop-side milestones (1, 2, 5, 6) can all be done before the hardware comes back.
 - ESP32 boards only see **2.4 GHz** WiFi. Set the phone hotspot to 2.4 GHz if it asks.
 

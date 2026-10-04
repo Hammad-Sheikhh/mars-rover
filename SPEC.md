@@ -189,7 +189,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. | Teammate tests | Same as 3. |
 | 5 | **Photo descriptions**: live `describe.py` using Claude vision. | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
 | 6 | **Mission control page.** | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
-| 7 | **Live Jev.** | No (needs an account) | `--sim` runs with `JEV_MODE=live`. |
+| 7 | **Live Jev.** ✅ Code done; waiting for a key ($5 minimum credits). | No (needs credits) | `--sim` runs with `JEV_MODE=live`. |
 | 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
 
 **Live Jev (7) comes first**, because it's the heart of the project (decided 2026-10-05). Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai). After that, milestones 1, 2, 5 and 6 can be done in any order. Milestone 3 is the one the teammate is waiting for, so it's worth doing early.

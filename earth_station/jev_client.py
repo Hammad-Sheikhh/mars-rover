@@ -4,9 +4,10 @@ JEV_MODE=mock  - offline rule-based stand-in with the same output shape, so the
                  whole loop runs without an account or internet.
 JEV_MODE=live  - calls the real Typesafe Jev API.
 
-The live request uses the documented "state + typed questions" shape. The exact
-field names for choice answers are NOT yet confirmed against Typesafe's own
-docs: if parsing fails, adjust `_parse_choice` / `_parse_noul` only.
+Request and reply follow TypeSafe's API reference (https://docs.typesafe.ai/api):
+POST {state, model, questions} to /v1/systemone with a Bearer key. A choice
+question lists its options as a `criteria` map (option -> what it means); the
+reply gives `probabilities` per option. A noul reply is a 0-1 `noul` value.
 """
 
 from __future__ import annotations
@@ -38,12 +39,22 @@ class Decision:
 QUESTIONS: dict[str, Any] = {
     "next_action": {
         "type": "choice",
-        "options": list(ACTIONS),
         "instructions": "The safest move that still makes progress toward the goal",
+        "criteria": {
+            "forward": "Drive straight ahead; only when the path ahead is clear",
+            "turn_left": "Turn left on the spot, toward open space on the left",
+            "turn_right": "Turn right on the spot, toward open space on the right",
+            "reverse": "Back up; when something is very close ahead",
+            "stop": "Stay still; when unsure, tilted, or nowhere is safe",
+        },
     },
     "path_blocked": {
         "type": "noul",
         "instructions": "Something blocks the path straight ahead of the rover",
+        "criteria": {
+            "true": "An obstacle, wall or drop is close ahead",
+            "false": "The path straight ahead is open",
+        },
     },
 }
 
@@ -80,7 +91,7 @@ class JevClient:
         try:
             r = await self._client.post(
                 self._s.jev_api_url,
-                json={"state": state, "questions": QUESTIONS},
+                json={"state": state, "model": self._s.jev_model, "questions": QUESTIONS},
                 headers={"Authorization": f"Bearer {self._s.jev_api_key}"},
                 timeout=2.0,
             )
@@ -88,6 +99,10 @@ class JevClient:
             raise JevError(f"Jev API unreachable: {e}") from e
         if r.status_code in (401, 403):
             raise JevError("Jev rejected the API key (check JEV_API_KEY)")
+        if r.status_code in (429, 529):
+            raise JevError(
+                f"Jev is busy or rate-limited (HTTP {r.status_code}); stopping this turn"
+            )
         if r.status_code >= 400:
             raise JevError(f"Jev API returned HTTP {r.status_code}")
         try:
@@ -100,11 +115,11 @@ class JevClient:
 
 
 def _parse_choice(answer: Any) -> dict[str, float]:
-    """Accept the few plausible shapes for a choice answer: a mapping of option to
-    probability under 'choice', 'probabilities' or 'distribution'."""
+    """Read option -> probability. The API puts it under 'probabilities' (and the
+    winning option, a string, under 'choice'); older write-ups used other keys."""
     if not isinstance(answer, dict):
         raise JevError("missing 'next_action' answer")
-    for key in ("choice", "probabilities", "distribution"):
+    for key in ("probabilities", "choice", "distribution"):
         dist = answer.get(key)
         if isinstance(dist, dict):
             probs = {a: float(dist.get(a, 0.0)) for a in ACTIONS}

@@ -44,6 +44,7 @@ graph TD
 | AP mode — rover control page | ✅ Working |
 | AP mode — camera live view | ✅ Working |
 | Earth Station (`earth_station/`) | 🧪 Runs on the simulator; rover firmware for Jev Auto is next |
+| Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start step 5) |
 | Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
 | Easy setup, board finder, mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestones 1, 2, 6) |
 
@@ -70,6 +71,7 @@ graph TD
 *   **Jev Auto**: twice a second, reads telemetry, reads the latest camera description, asks Jev for the next move and sends it to the rover.
 *   **Two safety layers**: laptop-side gate (confidence, stale data, blocked path) plus the rover's own reflexes and watchdog.
 *   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
+*   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions, even against the simulator.
 *   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
 
 Full guide: [docs/EARTH_STATION.md](docs/EARTH_STATION.md). Design walkthrough: open [docs/design/earth-station-plan.html](docs/design/earth-station-plan.html) in a browser.
@@ -164,6 +166,22 @@ Keep the rover still while it powers on, because the gyro calibrates at boot.
    You should see a pre-flight list of `OK` lines, then one line per decision, like `#7 turn_right 0.91 -> sent, rover ok`. Press `Ctrl+C` to stop.
 
 To connect the real rover today, see [docs/EARTH_STATION.md](docs/EARTH_STATION.md). The simpler hotspot-based setup is planned in [SPEC.md](SPEC.md#5-setup-procedure-the-target).
+
+### 5. Connect the real Jev (no rover needed)
+
+1. Get a key: sign in at [console.typesafe.ai/keys](https://console.typesafe.ai/keys) and create an API key. Copy it.
+2. Open `.env` in the repo folder and set:
+   ```sh
+   JEV_MODE=live
+   JEV_API_KEY=<paste your key here>
+   ```
+   Save the file. `.env` never goes to GitHub, so the key stays private. Never paste it into code, issues or chat.
+3. Test it with the fake rover (internet needed, no rover):
+   ```sh
+   python -m earth_station --sim
+   ```
+   The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
+4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
 
 ---
 
