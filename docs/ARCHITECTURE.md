@@ -43,10 +43,14 @@ If the STA connection fails at boot, the board keeps running in AP-only mode and
 | IMU | MPU6050 via `MPU6050_tockn`. Gyro offsets are calibrated at boot, so **keep the rover still while it powers on** |
 | Environment | DHT11 (temperature, humidity), BMP280 (pressure, altitude relative to the boot baseline), LDR (day/night) |
 | Event log | `lastEvent` is one of `Nominal`, `Obstacle Avoided`, `Tilt Warning`, `Impact Detected`. It resets to `Nominal` after each upload |
-| Local UI | `WebServer` on port 80: `/` (page), `/startnav`, `/startstop`, `/sensors/data` (JSON) |
+| Local UI | `WebServer` on port 80: `/` (page), `/startnav`, `/startstop`, `/startjev`, `/sensors/data` (JSON), `/id` |
+| Modes | `manual`, `autonomy` or `jev`. Pressing any manual button leaves Jev Auto |
+| Jev Auto | `POST /jev/cmd` (needs the `X-Token` header) runs one move of up to 500 ms, timed with `millis()`. Vetoes: tilt, and forward under 20 cm. Watchdog: stop if no command for 1.5 s. See [EARTH_STATION.md](EARTH_STATION.md#rover-protocol) |
+| Distance | One ultrasonic reading every 60 ms, as a rolling median of 3, reported as `distance_cm` |
+| Network name | Announces `rover.local` (mDNS) once it has joined the WiFi network |
 | Upload | `sensor_readings` insert every 5 s, timed with `millis()` so nothing blocks |
 
-Control loop: a single `loop()` with no RTOS tasks. The autonomous avoidance sequence uses `delay()`, so the web server and uploads pause for about 1.2 s during each avoidance manoeuvre.
+Control loop: a single `loop()` with no RTOS tasks. The autonomous avoidance sequence uses `delay()`, so the web server and uploads pause for about 1.2 s during each avoidance manoeuvre. Jev Auto doesn't use `delay()`.
 
 ### `cam1/` — camera (AI Thinker ESP32-CAM)
 

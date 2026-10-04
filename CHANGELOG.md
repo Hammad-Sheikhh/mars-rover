@@ -5,6 +5,8 @@ Notable changes to this project. The format follows [Keep a Changelog](https://k
 ## [Unreleased]
 
 ### Added
+- **Rover Jev Auto mode** (firmware 2.1): a Jev Auto button, `POST /jev/cmd` with an `X-Token` check, a 1.5 s watchdog, tilt and 20 cm forward vetoes, and moves timed with `millis()`. `/sensors/data` adds `distance_cm`, `mode` and `last_event`. New `GET /id`, `GET /startjev`, and the `rover.local` name. The control page shows the obstacle distance. **The rover's `secrets.h` needs a new `ROVER_CMD_TOKEN` line.**
+- Simulator answers `GET /id`.
 - Live Jev now follows TypeSafe's official API: options sent as a `criteria` map, `model` field, clear errors for a bad key or rate limit. `JEV_API_URL` defaults to the TypeSafe endpoint, so only `JEV_API_KEY` is needed. Tests check it against the documented examples.
 - **Earth Station** (`earth_station/`): a laptop ground station that lets Jev drive the rover. It includes a mock Jev, a built-in rover and camera simulator, a suggest-only mode, a laptop-side safety gate and JSONL run logs.
 - One-command setup scripts (`scripts/setup.ps1`, `scripts/setup.sh`), `pyproject.toml`, and 26 tests.

@@ -43,7 +43,8 @@ graph TD
 | Supabase database + storage | ✅ Working |
 | AP mode — rover control page | ✅ Working |
 | AP mode — camera live view | ✅ Working |
-| Earth Station (`earth_station/`) | 🧪 Runs on the simulator; rover firmware for Jev Auto is next |
+| Earth Station (`earth_station/`) | 🧪 Runs on the simulator |
+| Rover Jev Auto mode (firmware 2.1) | 🧪 Written and compiles; waiting for a test on the real rover |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start step 5) |
 | Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
 | Easy setup, board finder, mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestones 1, 2, 6) |
@@ -55,6 +56,8 @@ graph TD
 ### 🤖 Rover (`rover1/rover1.ino`)
 *   **Autonomous Navigation**: Obstacle avoidance with an HC-SR04 ultrasonic sensor (median-of-3 filtering, back up and turn when closer than 40 cm).
 *   **Manual Mode**: Forward/stop toggle from the control page.
+*   **Jev Auto Mode**: a third button on the control page hands driving to the Earth Station laptop. The rover takes short moves (up to 0.5 s) over `POST /jev/cmd` with a shared token. It refuses to drive forward under 20 cm or while tilted, and stops by itself if the laptop goes quiet for 1.5 s.
+*   **Found by name**: announces itself as `rover.local` on the WiFi network, and answers `/id`.
 *   **IMU Telemetry (MPU6050)**: Pitch, roll and terrain vibration via the `MPU6050_tockn` library, with gyro calibration on boot.
 *   **Environmental Sensing**: Temperature and humidity (DHT11), pressure and relative altitude (BMP280), day/night (LDR).
 *   **Event Log**: `last_event` field records `Obstacle Avoided`, `Tilt Warning`, `Impact Detected` or `Nominal`.
@@ -127,6 +130,8 @@ cp cam1/secrets.example.h  cam1/secrets.h
 ```
 
 Fill in the WiFi network, AP password and Supabase URL + **anon** key. Never use the `service_role` key on a device.
+
+The rover also needs `ROVER_CMD_TOKEN`: a random password of 8 or more characters that the laptop uses to drive it. Put the same value in the laptop's `.env`. To make one: `python -c "import secrets; print(secrets.token_urlsafe(16))"`.
 
 ### 3. Firmware Deployment
 Requires **ESP32 Arduino core 3.x** (uses the pin-based `ledcAttach` API).

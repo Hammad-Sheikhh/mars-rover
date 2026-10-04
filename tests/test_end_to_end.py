@@ -77,3 +77,14 @@ def test_wrong_token_is_rejected(settings):
     finally:
         for srv in (rover, camera):
             srv.shutdown()
+
+
+def test_boards_identify_themselves():
+    rover, camera = sim.start(sim.World(), rover_port=0, camera_port=0)
+    try:
+        for srv, board in ((rover, "rover"), (camera, "camera")):
+            r = httpx.get(f"http://127.0.0.1:{srv.server_address[1]}/id")
+            assert r.json()["board"] == board
+    finally:
+        for srv in (rover, camera):
+            srv.shutdown()

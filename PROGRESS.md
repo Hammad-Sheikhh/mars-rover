@@ -19,7 +19,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
 | Easy setup, finding the boards automatically | ⏳ Milestones 1–2 (laptop only) |
-| Rover code for "Jev Auto" mode | ⏳ Milestone 3 (leader writes it, teammate tests it) |
+| Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
 | Mission control page in the browser | ⏳ Milestone 6 |
 | Real Jev connection | ✅ Code ready and tested against TypeSafe's docs. Waiting for a key ($5 of credits) |
@@ -45,12 +45,12 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Merge the spec pull request (milestone 0).
-2. **Real Jev:** the code is ready. Buy $5 of credits at console.typesafe.ai (the minimum, about 40 hours of driving), create a key, and put it in `.env` with `JEV_MODE=live`.
-3. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators).
-4. Milestone 1: easy setup (one place for the hotspot details, automatic rover token, `--check` command).
-5. Milestone 3: rover code for Jev Auto, so the teammate has something to test.
-6. Milestones 2, 5, 6: board finder, photo descriptions, mission control page.
+1. Merge the pull requests in order: #5 (spec), then #6 (Jev), then #7 (rover Jev Auto, after CI is green).
+2. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them the rover token **privately** (it's in `.env` as `ROVER_CMD_TOKEN`).
+3. Teammate: flash firmware 2.1 and run the hardware checklist in PR #7.
+4. **Real Jev:** the code is ready. Buy $5 of credits at console.typesafe.ai (the minimum, about 40 hours of driving), create a key, and put it in `.env` with `JEV_MODE=live`.
+5. Milestone 1: easy setup (one place for the hotspot details, automatic rover token, `--check` command).
+6. Milestones 2, 4, 5, 6: board finder, camera name, photo descriptions, mission control page.
 
 ---
 
@@ -65,10 +65,20 @@ The full build order is in `SPEC.md` section 6.
 4. **Added to `CLAUDE.md`**: follow the spec, work without the rover (simulator first, a hardware checklist for the teammate in firmware PRs), and teach as we build.
 5. **Rewrote the README's laptop setup** as numbered beginner steps, and linked the spec.
 6. **Connected the code to the real Jev** using TypeSafe's official docs. The old code listed the moves in the wrong field. Fixed, and 6 tests added. A key needs at least $5 of credits, about 40 hours of driving at 2 questions a second. The leader will buy credits later, so we use the pretend Jev for now.
+7. **Added a `CLAUDE.md` rule:** Claude suggests `/clear` (a fresh chat) at good stopping points, after updating this diary.
+8. **Wrote the rover's Jev Auto code** (milestone 3, firmware 2.1):
+   - a Jev Auto button;
+   - `/jev/cmd`, which takes moves from the laptop and checks the token;
+   - a 1.5 s safety timer (watchdog), plus tilt and "too close" vetoes;
+   - moves timed without `delay()`;
+   - the extra sensor fields, and the `rover.local` name.
+
+   It compiles in CI but hasn't run on the real rover yet. Also created a random rover token in `.env` and `rover1/secrets.h`.
 
 **Things to remember**
 - Real Jev: put the key in `.env` (`JEV_API_KEY`) and set `JEV_MODE=live`. Never paste it in chat or code. `DECIDE_EVERY_MS=1000` halves the cost.
 - The leader has no rover right now, so laptop-side milestones (1, 2, 5, 6) can all be done before the hardware comes back.
+- The rover's `secrets.h` now **must** have a `ROVER_CMD_TOKEN` line, or the rover code won't compile. It must equal `ROVER_CMD_TOKEN` in the laptop's `.env`. Share it privately, never on GitHub.
 - ESP32 boards only see **2.4 GHz** WiFi. Set the phone hotspot to 2.4 GHz if it asks.
 
 ### 2026-10-04 — Session 1: clean-up, going public, Earth Station
