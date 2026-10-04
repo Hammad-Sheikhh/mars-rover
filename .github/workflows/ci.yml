@@ -17,12 +17,17 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - name: Install gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"             | tar xz -C "$RUNNER_TEMP" gitleaks
+      # Scans the full history (small repo), so force-pushes and rebases can't skip commits.
+      - name: Scan git history
+        run: '"$RUNNER_TEMP/gitleaks" git --redact --verbose .'
 
   compile:
     name: Compile ${{ matrix.sketch }}
@@ -36,7 +41,7 @@ jobs:
           - sketch: cam1
             fqbn: esp32:esp32:esp32cam
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Use placeholder credentials
         run: cp ${{ matrix.sketch }}/secrets.example.h ${{ matrix.sketch }}/secrets.h
