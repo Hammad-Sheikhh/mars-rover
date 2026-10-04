@@ -60,3 +60,36 @@ jobs:
             - name: DHT sensor library
             - name: MPU6050_tockn
           enable-warnings-report: true
+
+  earth-station:
+    name: Earth Station (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Run the same one-command setup a teammate would, so a broken setup fails CI.
+      - name: Setup (Windows)
+        if: runner.os == 'Windows'
+        run: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+      - name: Setup (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: sh scripts/setup.sh
+
+      - name: Lint
+        shell: bash
+        run: |
+          PY=$([ "$RUNNER_OS" = "Windows" ] && echo .venv/Scripts/python || echo .venv/bin/python)
+          $PY -m ruff check .
+          $PY -m ruff format --check .
+      - name: Tests
+        shell: bash
+        run: |
+          PY=$([ "$RUNNER_OS" = "Windows" ] && echo .venv/Scripts/python || echo .venv/bin/python)
+          $PY -m pytest -q
