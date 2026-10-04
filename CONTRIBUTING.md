@@ -15,6 +15,12 @@
    cp cam1/secrets.example.h  cam1/secrets.h
    ```
    Ask the project owner for the Supabase URL and anon key over a private channel. **Never paste them in issues, PRs or commits.**
+5. Set up the Earth Station (Python 3.11+). One command creates `.venv/`, installs everything and creates `.env`:
+   ```sh
+   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1   # Windows
+   sh scripts/setup.sh                                          # macOS / Linux
+   ```
+   Then check it works: `python -m earth_station --sim` and `pytest`.
 
 ## Workflow
 
@@ -29,9 +35,9 @@
    fix(cam): drop x-upsert header on image upload
    docs: update pin map for new IR sensor
    ```
-   Scopes: `rover`, `cam`, `db`, `docs`, `ci`.
+   Scopes: `rover`, `cam`, `station`, `db`, `docs`, `ci`.
 3. Push and open a pull request into `main`. Fill in the template.
-4. CI must pass: both sketches compile and the secret scan is clean.
+4. CI must pass: both sketches compile, the secret scan is clean, and the Earth Station sets up, lints and tests cleanly on Windows, macOS and Linux.
 5. The other team member reviews. Squash-merge once it's approved.
 
 ## Rules of thumb

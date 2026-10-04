@@ -5,6 +5,11 @@ Notable changes to this project. The format follows [Keep a Changelog](https://k
 ## [Unreleased]
 
 ### Added
+- **Earth Station** (`earth_station/`): a laptop ground station that lets Jev drive the rover. It includes a mock Jev, a built-in rover and camera simulator, a suggest-only mode, a laptop-side safety gate and JSONL run logs.
+- One-command setup scripts (`scripts/setup.ps1`, `scripts/setup.sh`), `pyproject.toml`, and 26 tests.
+- `docs/EARTH_STATION.md` with the rover protocol for Jev Auto (`distance_cm`, `mode`, `POST /jev/cmd`).
+- Design pages in `docs/design/`.
+- A CI job that runs the setup, lint and tests on Windows, macOS and Linux.
 - `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md` and `docs/ARCHITECTURE.md`.
 - `docs/supabase/schema.sql` with the recommended tables and RLS policies.
 - GitHub CI: compiles both sketches and runs a gitleaks secret scan.

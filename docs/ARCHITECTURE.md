@@ -57,6 +57,19 @@ Control loop: a single `loop()` with no RTOS tasks. The autonomous avoidance seq
 | Upload | An `esp_timer` sets a flag every 10 s. `loop()` then captures, uploads to Storage, and inserts the public URL into `camera_captures` |
 | Flash LED | GPIO 4 lights up while a frame is captured |
 
+### `earth_station/` — laptop ground station (Python)
+
+Runs on a laptop on the same router as both boards. Four async workers share a timestamped whiteboard:
+
+| Worker | Rate | Does |
+|---|---|---|
+| Sensor reader | 200 ms | `GET rover /sensors/data` |
+| Camera watcher | 1.5 s | `GET camera /capture`, then `describe()` turns the photo into a short scene dict |
+| Decision maker | 500 ms | Numbers to words, asks Jev (`choice` over 5 actions), applies the safety gate, `POST rover /jev/cmd` |
+| Logger | always | Console plus `runs/*.jsonl` |
+
+The rover owns the drive mode. The Earth Station only drives while telemetry reports `mode: "jev"`, so any phone button press stops it. The full protocol and the rover-side rules (watchdog, vetoes, seq handling) are in [EARTH_STATION.md](EARTH_STATION.md#rover-protocol). `sim.py` implements the same protocol for tests.
+
 ## Data model (Supabase)
 
 | Table | Columns written by firmware |
@@ -96,6 +109,9 @@ The threat model assumes a **public repository** and a rover operated over open 
 | Supabase `service_role` key | — | **Never** put it on a device or in the repo |
 | AP control page | Anyone who joins the AP can drive the rover | WPA2 AP password (8+ characters, not the example value). No HTTP auth yet (see Known gaps) |
 | Camera feed | Anyone who joins the camera AP can view it. Uploaded images are public URLs | Public bucket by design. Do not point the camera at private spaces |
+
+| Earth Station keys (Jev, vision) | Only on the laptop | Repo-root `.env` (git-ignored). Never on a board |
+| `/jev/cmd` drive endpoint | Anyone on the router could drive the rover | `X-Token` shared secret, rover-side vetoes and watchdog, Jev Auto only while enabled from the AP page |
 
 ### Known gaps (tracked for future work)
 

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Design page. Open in a browser. Mermaid diagrams render via the script at the end. -->
+<title>Jev Rover Autopilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column (~72ch) with wide diagram panels; option sections stacked, jump chips at top. Mission-control schematic, oxide accent used sparingly. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --sunken: #e4e8ed;
+  --fg: #17202a;
+  --muted: #5b6673;
+  --line: #d3d9e0;
+  --accent: #b5441b;
+  --accent-2: #0f7c76;
+  --good: #1f7a3f;
+  --warn: #9a6500;
+  --bad: #b3261e;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --surface: #161d25; --sunken: #1c252f; --fg: #e6ebf0; --muted: #98a4b1;
+    --line: #2a3541; --accent: #e57a4a; --accent-2: #45bdb2; --good: #5ac47f; --warn: #e0a73a; --bad: #f07167;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #161d25; --sunken: #1c252f; --fg: #e6ebf0; --muted: #98a4b1;
+  --line: #2a3541; --accent: #e57a4a; --accent-2: #45bdb2; --good: #5ac47f; --warn: #e0a73a; --bad: #f07167;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--body); font-size: 16px; line-height: 1.6;
+  padding-inline: 16px; padding-block: 0 64px;
+}
+.wrap { max-width: 980px; margin-inline: auto; display: grid; gap: 56px; }
+.prose { max-width: 72ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: 0.01em; }
+h2 { font-size: 1.6rem; font-weight: 600; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent-2); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.stack { display: grid; gap: 16px; }
+.stack-lg { display: grid; gap: 28px; }
+
+/* Header */
+header.hero { padding-block: 48px 8px; display: grid; gap: 18px; border-bottom: 1px solid var(--line); padding-bottom: 32px; }
+header.hero .lede { font-size: 1.12rem; color: var(--fg); max-width: 68ch; }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; }
+.jump a {
+  font-family: var(--mono); font-size: 0.8rem; text-decoration: none; color: var(--fg);
+  border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 999px;
+}
+.jump a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Fact strip about Jev */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fact { background: var(--surface); padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.fact b { font-family: var(--display); font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 0.9rem; }
+
+/* Panels */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.diagram pre.mermaid { margin: 0; display: flex; justify-content: center; min-width: 560px; background: transparent; }
+pre.code {
+  margin: 0; overflow-x: auto; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px;
+  padding: 14px 16px; font-family: var(--mono); font-size: 0.82rem; line-height: 1.55; color: var(--fg);
+}
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.two > * { min-width: 0; }
+
+ul.clean { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
+ol.steps li::marker { font-family: var(--mono); color: var(--accent); }
+
+/* Option sections */
+.option { display: grid; gap: 20px; padding-top: 8px; border-top: 2px solid var(--fg); }
+.option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; justify-content: space-between; }
+.option-head .num { font-family: var(--mono); color: var(--accent); font-size: 0.85rem; letter-spacing: 0.1em; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--mono); font-size: 0.75rem; padding: 3px 9px; border-radius: 4px; border: 1px solid var(--line); background: var(--sunken); color: var(--muted); }
+.chip.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.chip.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.pc h3 { font-size: 0.8rem; font-family: var(--mono); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.pc.pro h3 { color: var(--good); }
+.pc.con h3 { color: var(--bad); }
+.who { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 0.95rem; }
+.who dt { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); padding-top: 2px; }
+.who dd { margin: 0; }
+
+/* Table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 0.9rem; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--sunken); }
+tbody tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.pick td { background: color-mix(in srgb, var(--accent-2) 9%, var(--surface)); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+
+/* Callouts */
+.note { border-left: 3px solid var(--accent-2); padding: 12px 16px; background: var(--surface); border-radius: 0 8px 8px 0; }
+.note.caution { border-left-color: var(--warn); }
+.verdict { background: var(--surface); border: 1px solid var(--accent-2); border-radius: 10px; padding: 24px; display: grid; gap: 14px; }
+.phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.phase { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--bg); display: grid; gap: 6px; align-content: start; }
+.phase .eyebrow { color: var(--accent); }
+
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 20px; display: grid; gap: 8px; }
+footer ul { margin: 0; padding-left: 1.1em; }
+
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Mars Rover · design study · Oct 2026</div>
+  <h1>Jev Rover Autopilot</h1>
+  <p class="lede">Five ways to let Jev drive the rover. Jev reads the rover's telemetry and orientation plus a text description of the camera view, picks the next move, and sends it back. Both AP control pages keep working the whole time, and a new <b>Jev Auto</b> mode sits next to Manual and Autonomy.</p>
+  <nav class="jump" aria-label="Jump to section">
+    <a href="#jev">What Jev is</a>
+    <a href="#shared">Shared design</a>
+    <a href="#opt1">1 · On-board</a>
+    <a href="#opt2">2 · Supabase cloud</a>
+    <a href="#opt3">3 · Ground station</a>
+    <a href="#opt4">4 · MQTT bus</a>
+    <a href="#opt5">5 · Layered autonomy</a>
+    <a href="#compare">Compare</a>
+    <a href="#pick">Recommendation</a>
+  </nav>
+</header>
+
+<!-- ============ WHAT IS JEV ============ -->
+<section id="jev" class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Background</div>
+    <h2>What Jev is, in rover terms</h2>
+    <p>Jev is a "System 1" decision model from Typesafe AI. A chat LLM writes text word by word. Jev works differently: you send it a <b>state</b> (plain text describing the situation) plus a few typed <b>questions</b>, and it answers all of them in one shot, each answer with a probability. For a rover, the useful question is "which of these allowed moves should I make next?"</p>
+  </div>
+  <div class="facts">
+    <div class="fact"><b>70–500 ms</b><span>end-to-end per decision, according to published tests</span></div>
+    <div class="fact"><b>3 question types</b><span><code>noul</code> yes/no · <code>choice</code> pick one · <code>score</code> low/med/high</span></div>
+    <div class="fact"><b>Text only</b><span>No image input documented, so the camera view has to become text first</span></div>
+    <div class="fact"><b>$0.042 / M</b><span>input tokens; output is free. One decision per second costs pennies a day</span></div>
+  </div>
+  <div class="two">
+    <div class="panel stack">
+      <h3>Good at</h3>
+      <ul class="clean">
+        <li>Fast, repeated choices from a fixed list of actions</li>
+        <li>Yes/no checks such as "is the path ahead blocked?"</li>
+        <li>Scoring risk (terrain roughness, tilt danger)</li>
+        <li>Several questions in one call at no extra latency</li>
+      </ul>
+    </div>
+    <div class="panel stack">
+      <h3>Weak at</h3>
+      <ul class="clean">
+        <li>Arithmetic and unit comparisons. Do those in code first, then pass the result as words ("obstacle 38 cm ahead, under the 40 cm limit")</li>
+        <li>Long or noisy state. Accuracy drops when the context is bloated</li>
+        <li>Writing reports or explanations. That's a job for an LLM such as Claude</li>
+        <li>Real hardware. Public demos so far are simulators and robot arms in MuJoCo</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note caution prose">Jev is new, and most public details come from third-party write-ups (see sources at the end). Before building, check the exact request format for <code>choice</code> questions, the rate limits and the auth in Typesafe's own docs. The JSON on this page is illustrative.</p>
+</section>
+
+<!-- ============ SHARED DESIGN ============ -->
+<section id="shared" class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Common to all five options</div>
+    <h2>The parts that never change</h2>
+    <p>Whichever architecture you pick, the rover firmware gets the same three additions. Only the transport between the boards and Jev differs between options.</p>
+  </div>
+
+  <div class="two">
+    <div class="stack">
+      <h3>1. A third drive mode</h3>
+      <p>The rover's AP page gets a <b>Jev Auto</b> button next to <i>Initiate Autonomy</i> and <i>Manual Propulsion</i>. Any manual press on either AP page drops Jev Auto immediately, so a human can always take over.</p>
+    </div>
+    <div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> MANUAL
+  MANUAL --> AUTONOMY: Initiate Autonomy
+  AUTONOMY --> MANUAL: Abort
+  MANUAL --> JEV_AUTO: Jev Auto
+  JEV_AUTO --> MANUAL: Abort or any manual press
+  JEV_AUTO --> SAFE_STOP: no command for 1.5 s, tilt, obstacle under 20 cm
+  SAFE_STOP --> JEV_AUTO: fresh command and path clear
+  SAFE_STOP --> MANUAL: Abort
+</pre>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="panel stack">
+      <h3>2. Reflexes on the rover always win</h3>
+      <ul class="clean">
+        <li><b>Obstacle veto:</b> the ultrasonic sensor stops forward motion under 20 cm, whatever Jev says.</li>
+        <li><b>Tilt veto:</b> pitch or roll over 35° stops the motors.</li>
+        <li><b>Watchdog:</b> no fresh command for 1.5 s means stop. If the network drops, the rover halts instead of driving blind.</li>
+        <li><b>Short moves only:</b> each command lasts at most 500 ms, then the rover waits for the next one.</li>
+        <li><b>Confidence gate:</b> if Jev's top action is under 0.6 probability, the rover stops or falls back to the existing ultrasonic autonomy.</li>
+      </ul>
+    </div>
+    <div class="panel stack">
+      <h3>3. One command format</h3>
+      <p>Whatever carries it (HTTP, a database row or MQTT), a command looks like this:</p>
+<pre class="code">{
+  "seq": 4182,
+  "action": "turn_right",    // forward | turn_left | turn_right | reverse | stop
+  "speed": 180,              // 0-255, clamped on the rover
+  "duration_ms": 300,        // max 500
+  "confidence": 0.87,
+  "issued_at": 1759581234567
+}</pre>
+      <p class="mono" style="color:var(--muted);font-size:.8rem">The rover rejects out-of-order <code>seq</code> numbers and commands older than 1 s.</p>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="stack">
+      <h3>Your teammate's contract: the camera description</h3>
+      <p>Jev can't see images, so a vision model (Claude, Gemini or similar) turns each frame into a <b>short</b> description. Keep it structured and small, because long state makes Jev less accurate.</p>
+<pre class="code">{
+  "frame_id": "capture_83211_42.jpg",
+  "captured_at": 1759581233900,
+  "summary": "Chair leg about 50 cm ahead, slightly left. Open floor to the right.",
+  "obstacle_ahead": true,
+  "clear_side": "right",           // left | right | both | none
+  "hazards": ["cable on floor"]
+}</pre>
+      <p style="color:var(--muted);font-size:.92rem">The camera uploads every 10 s today. For Jev Auto it needs a frame every 1–2 s.</p>
+    </div>
+    <div class="stack">
+      <h3>The Jev call each cycle</h3>
+      <p>Code turns the numbers into words before Jev sees them. Jev is weak at arithmetic, so "62 cm" becomes "clear, above the 40 cm limit".</p>
+<pre class="code">POST  Typesafe Jev API   (illustrative)
+{
+  "state": "Mode: explore. Front distance: 62 cm (clear).
+            Pitch 3 deg, roll -1 deg (level). Terrain: smooth.
+            Last move: forward 300 ms.
+            Camera 0.4 s ago: chair leg ~50 cm ahead slightly left;
+            open floor to the right. Hazard: cable on floor.",
+  "questions": {
+    "next_action": { "type": "choice",
+      "options": ["forward","turn_left","turn_right","reverse","stop"],
+      "instructions": "Safest move that keeps exploring" },
+    "path_blocked": { "type": "noul",
+      "instructions": "Something blocks the path straight ahead" },
+    "terrain_risk": { "type": "score",
+      "levels": ["low","medium","high"] }
+  }
+}
+→ next_action: turn_right 0.87 · path_blocked 0.81 · terrain_risk low</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OPTION 1 ============ -->
+<section id="opt1" class="option">
+  <div class="option-head">
+    <div class="stack" style="gap:6px">
+      <span class="num">OPTION 01</span>
+      <h2>On-board brain: the rover calls Jev itself</h2>
+    </div>
+    <div class="chips"><span class="chip good">no extra machine</span><span class="chip bad">API key on device</span><span class="chip warn">~0.6–1.5 s / move</span></div>
+  </div>
+  <p class="prose">The ESP32 builds the state string from its own sensors, fetches the latest camera description from Supabase, calls Jev over HTTPS and runs the answer. Your teammate's vision step runs in the cloud and writes descriptions into <code>camera_captures</code>.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph Rover["ESP32 rover"]
+    S["Sensors: ultrasonic, MPU6050, BMP280, DHT11"] --> B["Build state text"]
+    B --> J1["HTTPS call to Jev (core 0 task)"]
+    J1 --> X["Execute move with reflex veto"]
+    AP1["AP page: Manual / Autonomy / Jev Auto"] --> X
+  end
+  subgraph Cam["ESP32-CAM"]
+    C["Capture every 1-2 s"] --> U["Upload JPEG"]
+    AP2["AP live view"]
+  end
+  U --> ST[("Supabase Storage")]
+  ST --> V["Vision model writes description (teammate)"]
+  V --> DB[("camera_captures.description")]
+  DB -->|"poll latest"| B
+  J1 <--> JEV["Jev API"]
+</pre>
+  </div>
+  <div class="two">
+    <div class="pc pro"><h3>Pros</h3><ul class="clean">
+      <li>Fewest moving parts. Nothing else has to be running.</li>
+      <li>Fresh sensor data, because the rover reads it directly.</li>
+      <li>Works anywhere the rover has WiFi with internet.</li>
+    </ul></div>
+    <div class="pc con"><h3>Cons</h3><ul class="clean">
+      <li>The Jev API key lives in firmware, and anyone with the board can dump it. That's a bad fit for a public repo.</li>
+      <li>HTTPS calls block for hundreds of ms. The call must move to a FreeRTOS task on core 0, or the AP page freezes.</li>
+      <li>TLS uses a lot of the ESP32's RAM next to the web server.</li>
+      <li>Every prompt tweak means reflashing the rover.</li>
+    </ul></div>
+  </div>
+  <dl class="who"><dt>YOU</dt><dd>FreeRTOS task, Jev client in C++, command executor, Jev Auto button</dd><dt>TEAMMATE</dt><dd>Faster camera capture plus a cloud vision step writing <code>description</code></dd></dl>
+</section>
+
+<!-- ============ OPTION 2 ============ -->
+<section id="opt2" class="option">
+  <div class="option-head">
+    <div class="stack" style="gap:6px">
+      <span class="num">OPTION 02</span>
+      <h2>Supabase cloud brain: Edge Functions decide</h2>
+    </div>
+    <div class="chips"><span class="chip good">keys stay server-side</span><span class="chip good">full decision log</span><span class="chip warn">~1–2 s / move</span><span class="chip warn">internet required</span></div>
+  </div>
+  <p class="prose">You already use Supabase, so let it host the brain. Both boards keep writing to tables. A database webhook triggers a <i>describe</i> function when a new image arrives and a <i>decide</i> function when new telemetry arrives. <i>decide</i> calls Jev and writes a row to a new <code>rover_commands</code> table. The rover picks commands up over Supabase Realtime (a websocket) or by polling every 500 ms.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  R["ESP32 rover"] -->|"telemetry every 0.5-1 s"| T[("sensor_readings")]
+  C["ESP32-CAM"] -->|"JPEG every 1-2 s"| ST[("Storage: rover_images")]
+  ST -->|"insert webhook"| FD["Edge Function: describe (teammate)"]
+  FD -->|"vision model"| CC[("camera_captures.description")]
+  T -->|"insert webhook"| FJ["Edge Function: decide"]
+  CC --> FJ
+  FJ <--> JEV["Jev API"]
+  FJ --> CMD[("rover_commands")]
+  CMD -->|"Realtime or poll"| R
+  AP1["Rover AP page"] -.-> R
+  AP2["Cam AP page"] -.-> C
+</pre>
+  </div>
+  <div class="two">
+    <div class="pc pro"><h3>Pros</h3><ul class="clean">
+      <li>The Jev and vision keys live in Supabase secrets, never on a board.</li>
+      <li>No extra hardware or laptop needs to stay on.</li>
+      <li>Every state, decision and image is stored, so you can replay a run and see why the rover turned.</li>
+      <li>Clean split: your teammate owns <code>describe</code>, you own <code>decide</code>.</li>
+    </ul></div>
+    <div class="pc con"><h3>Cons</h3><ul class="clean">
+      <li>Each decision makes several network hops, so the rover reacts slowly.</li>
+      <li>No internet means no Jev Auto. The rover falls back to its reflexes.</li>
+      <li>Many writes per second can hit free-tier limits.</li>
+      <li>Edge Function cold starts add delay after idle periods.</li>
+    </ul></div>
+  </div>
+  <dl class="who"><dt>YOU</dt><dd><code>decide</code> function (TypeScript), <code>rover_commands</code> table with RLS, rover command poller</dd><dt>TEAMMATE</dt><dd><code>describe</code> function plus faster camera uploads</dd></dl>
+</section>
+
+<!-- ============ OPTION 3 ============ -->
+<section id="opt3" class="option">
+  <div class="option-head">
+    <div class="stack" style="gap:6px">
+      <span class="num">OPTION 03</span>
+      <h2>Ground station: a laptop or Raspberry Pi runs the loop</h2>
+    </div>
+    <div class="chips"><span class="chip good">fastest to build and tweak</span><span class="chip good">keys on laptop</span><span class="chip good">~0.3–0.8 s / move</span><span class="chip warn">laptop must stay on</span></div>
+  </div>
+  <p class="prose">A small Python service ("Earth Station") runs on a laptop or Pi on the same WiFi as both boards. It reads the rover's existing <code>/sensors/data</code> endpoint several times a second, grabs frames from the camera's existing <code>/capture</code> endpoint, has them described, asks Jev, and sends the move to a new <code>/jev/cmd</code> endpoint on the rover. It can still log everything to Supabase.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph LAN["Same WiFi router"]
+    R["ESP32 rover: /sensors/data, /jev/cmd"]
+    C["ESP32-CAM: /capture"]
+    subgraph GS["Earth Station (Python)"]
+      P1["Poll telemetry 5 Hz"] --> SB["State builder"]
+      P2["Grab frame 1 Hz"] --> VD["Describe frame (teammate module)"]
+      VD --> SB
+      SB --> JC["Jev client"]
+      JC --> SF["Safety gate + rate limit"]
+    end
+  end
+  R --> P1
+  C --> P2
+  JC <--> JEV["Jev API"]
+  VD <--> VLM["Vision model API"]
+  SF -->|"POST /jev/cmd + token"| R
+  GS -.->|"log runs"| DB[("Supabase")]
+  PH1["Phone on rover AP"] -.-> R
+  PH2["Phone on cam AP"] -.-> C
+</pre>
+  </div>
+  <div class="two">
+    <div class="pc pro"><h3>Pros</h3><ul class="clean">
+      <li>Prompt and logic changes take seconds. Restart a Python script; no reflashing.</li>
+      <li>Fresh local data with no cloud round trip, so it's the lowest latency here.</li>
+      <li>Reuses the endpoints both boards already have. The rover only needs <code>/jev/cmd</code> and the Jev Auto mode.</li>
+      <li>Keys stay on one machine you control.</li>
+      <li>Your teammate can build the describe module as a plain Python function and test it on saved images.</li>
+    </ul></div>
+    <div class="pc con"><h3>Cons</h3><ul class="clean">
+      <li>A laptop or Pi has to be running and nearby.</li>
+      <li>Both boards must join the <b>same</b> router. Today the rover uses one network and the camera another.</li>
+      <li><code>/jev/cmd</code> needs a token, or anyone on that WiFi could drive the rover.</li>
+    </ul></div>
+  </div>
+  <dl class="who"><dt>YOU</dt><dd>Python loop, Jev client, safety gate, rover <code>/jev/cmd</code> plus watchdog</dd><dt>TEAMMATE</dt><dd><code>describe(jpeg) → dict</code> module, and the camera on the shared router</dd></dl>
+</section>
+
+<!-- ============ OPTION 4 ============ -->
+<section id="opt4" class="option">
+  <div class="option-head">
+    <div class="stack" style="gap:6px">
+      <span class="num">OPTION 04</span>
+      <h2>MQTT event bus: every part talks through topics</h2>
+    </div>
+    <div class="chips"><span class="chip good">push, not polling</span><span class="chip good">parts fully decoupled</span><span class="chip good">~0.3–1 s / move</span><span class="chip warn">new infrastructure</span></div>
+  </div>
+  <p class="prose">An MQTT broker (Mosquitto on a Pi, or a free hosted broker such as HiveMQ Cloud) carries every message. The rover publishes telemetry and subscribes to commands. The camera publishes frames, or frame URLs. A vision worker and a Jev agent each subscribe to what they need and publish their results. Every part can run anywhere and be restarted on its own.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  R["ESP32 rover"] -->|"rover/telemetry 5 Hz"| BR(("MQTT broker"))
+  C["ESP32-CAM"] -->|"cam/frame_url 1 Hz"| BR
+  BR -->|"cam/frame_url"| VW["Vision worker (teammate)"]
+  VW -->|"cam/description"| BR
+  BR -->|"telemetry + description"| JA["Jev agent"]
+  JA <--> JEV["Jev API"]
+  JA -->|"rover/cmd"| BR
+  BR -->|"rover/cmd"| R
+  R -->|"rover/status: mode, ack"| BR
+  BR -.->|"optional"| LOG["Logger to Supabase"]
+  AP1["Rover AP page"] -.-> R
+  AP2["Cam AP page"] -.-> C
+</pre>
+  </div>
+  <div class="two">
+    <div class="pc pro"><h3>Pros</h3><ul class="clean">
+      <li>Messages arrive as they happen, with no polling delay.</li>
+      <li>Each of you owns your own topics and can test against recorded messages.</li>
+      <li>Easy to add later: a live dashboard, a second rover, a data logger.</li>
+      <li>Works across networks when the broker is hosted.</li>
+    </ul></div>
+    <div class="pc con"><h3>Cons</h3><ul class="clean">
+      <li>One more system to learn and run: the broker, topic design and QoS settings.</li>
+      <li>MQTT over TLS on the ESP32 needs certificates set up.</li>
+      <li>The Jev agent and vision worker still need a host (laptop, Pi or cloud VM).</li>
+    </ul></div>
+  </div>
+  <dl class="who"><dt>YOU</dt><dd>Broker setup, rover <code>PubSubClient</code> integration, Jev agent</dd><dt>TEAMMATE</dt><dd>Camera publisher plus the vision worker</dd></dl>
+</section>
+
+<!-- ============ OPTION 5 ============ -->
+<section id="opt5" class="option">
+  <div class="option-head">
+    <div class="stack" style="gap:6px">
+      <span class="num">OPTION 05</span>
+      <h2>Layered autonomy: reflexes, Jev and an LLM planner</h2>
+    </div>
+    <div class="chips"><span class="chip good">smartest behaviour</span><span class="chip good">uses each model for its strength</span><span class="chip warn">most complex</span><span class="chip warn">two AI vendors</span></div>
+  </div>
+  <p class="prose">This works the way real rovers do: three layers running at three speeds. The ESP32 handles reflexes many times a second. Jev chooses each move several times a second. A slower LLM such as Claude looks at the bigger picture every 10–20 s. It sets a goal ("explore the open area on the right, avoid the chair") that goes into Jev's state, and it writes the mission report the old n8n workflow used to produce. This layer sits on top of the transport from option 3 or 4.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TB
+  subgraph T2["Tier 2: planner, every 10-20 s"]
+    LLM["LLM (Claude): read descriptions + telemetry history"] --> G["Current goal + mission report"]
+  end
+  subgraph T1["Tier 1: Jev policy, every ~300 ms"]
+    ST["State: goal + telemetry + latest description"] --> JEV["Jev: choice of next move"]
+  end
+  subgraph T0["Tier 0: ESP32 reflexes, every loop"]
+    RF["Obstacle veto, tilt veto, watchdog, manual override"] --> M["Motors"]
+  end
+  CAM["ESP32-CAM frames"] --> VD["Vision description (teammate)"]
+  VD --> ST
+  VD --> LLM
+  TEL["Rover telemetry"] --> ST
+  TEL --> LLM
+  G --> ST
+  JEV -->|"command"| RF
+  AP["Both AP pages"] -.-> RF
+</pre>
+  </div>
+  <div class="two">
+    <div class="pc pro"><h3>Pros</h3><ul class="clean">
+      <li>Jev does the fast, narrow choices it's built for, and the LLM does the reasoning and writing.</li>
+      <li>The rover follows a goal instead of wandering, and the decisions are explainable.</li>
+      <li>Brings mission reports back without n8n.</li>
+      <li>The reflex tier keeps the hardware safe if either model misbehaves.</li>
+    </ul></div>
+    <div class="pc con"><h3>Cons</h3><ul class="clean">
+      <li>The most code and the most things to debug.</li>
+      <li>Two AI APIs to pay for and keep keys for.</li>
+      <li>Only worth it once a simpler loop already drives reliably.</li>
+    </ul></div>
+  </div>
+  <dl class="who"><dt>YOU</dt><dd>Jev policy loop, planner prompt, goal hand-off, reflex tier</dd><dt>TEAMMATE</dt><dd>Vision descriptions, which both tiers 1 and 2 read</dd></dl>
+</section>
+
+<!-- ============ COMPARE ============ -->
+<section id="compare" class="stack-lg">
+  <div class="stack prose">
+    <div class="eyebrow">Side by side</div>
+    <h2>Comparison</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Option</th><th>Where the loop runs</th><th>Time per move</th><th>Keys safe</th><th>Extra hardware</th><th>Without internet</th><th>Iteration speed</th><th>Build effort</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><b>1</b> On-board</td><td>ESP32</td><td class="n">0.6–1.5 s</td><td><span class="dot bad"></span>No</td><td>None</td><td>Reflexes only</td><td><span class="dot bad"></span>Reflash</td><td><span class="dot warn"></span>Medium</td></tr>
+        <tr><td><b>2</b> Supabase cloud</td><td>Edge Functions</td><td class="n">1–2 s</td><td><span class="dot good"></span>Yes</td><td>None</td><td>Reflexes only</td><td><span class="dot warn"></span>Deploy</td><td><span class="dot warn"></span>Medium</td></tr>
+        <tr class="pick"><td><b>3</b> Ground station</td><td>Laptop / Pi</td><td class="n">0.3–0.8 s</td><td><span class="dot good"></span>Yes</td><td>Laptop or Pi</td><td>Vision + Jev need internet; LAN link works</td><td><span class="dot good"></span>Instant</td><td><span class="dot good"></span>Low</td></tr>
+        <tr><td><b>4</b> MQTT bus</td><td>Any host</td><td class="n">0.3–1 s</td><td><span class="dot good"></span>Yes</td><td>Broker (Pi or hosted)</td><td>Reflexes only (or local broker)</td><td><span class="dot good"></span>Fast</td><td><span class="dot warn"></span>Medium-high</td></tr>
+        <tr><td><b>5</b> Layered</td><td>3 or 4 + planner</td><td class="n">0.3–0.8 s (moves), 10–20 s (goals)</td><td><span class="dot good"></span>Yes</td><td>As 3 or 4</td><td>Reflexes only</td><td><span class="dot good"></span>Fast</td><td><span class="dot bad"></span>High</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="prose" style="color:var(--muted);font-size:.9rem">Times are estimates. They add up Jev's published 70–500 ms, a 1–3 s vision-model call (run in parallel, so it doesn't block each move) and the network hops for each design.</p>
+</section>
+
+<!-- ============ RECOMMENDATION ============ -->
+<section id="pick" class="verdict">
+  <div class="eyebrow" style="color:var(--accent-2)">Recommendation</div>
+  <h2>Start with the ground station (3), grow into layered autonomy (5)</h2>
+  <p class="prose">Option 3 gets Jev driving with the least new code. It reuses endpoints both boards already have, keeps every key off the hardware and the public repo, and lets you tune the Jev prompt in seconds while you learn how it behaves. Design the command format and topics so the loop can later move to MQTT (4) without changing the rover's logic. Then add the planner tier (5) once Jev drives reliably. Skip option 1 for this project: a key in public firmware is a leak waiting to happen.</p>
+  <div class="phases">
+    <div class="phase"><span class="eyebrow">Phase 1 · rover</span><b>Jev Auto mode + safety</b><span>Add <code>/jev/cmd</code> with a token, the watchdog, the reflex vetoes and the third AP button. Test it by sending commands from a script, with no AI yet.</span></div>
+    <div class="phase"><span class="eyebrow">Phase 1 · teammate</span><b>Describe module</b><span>Write <code>describe(jpeg) → dict</code> and check it against 30 saved frames. Move the camera to 1–2 s captures on the shared router.</span></div>
+    <div class="phase"><span class="eyebrow">Phase 2 · together</span><b>Earth Station loop</b><span>Join the two parts and call Jev. Start in "suggest only" mode: log what Jev would do while a human drives.</span></div>
+    <div class="phase"><span class="eyebrow">Phase 3</span><b>Let Jev drive, then add the planner</b><span>Turn on real commands with the confidence gate. Once it's stable, add the LLM goal and report tier.</span></div>
+  </div>
+</section>
+
+<footer>
+  <p>Sources on Jev (third-party; confirm against Typesafe's own documentation before building):</p>
+  <ul>
+    <li><a href="https://www.width.ai/post/what-is-jev-ai-typesafe" target="_blank" rel="noopener">What Is Jev AI? TypeSafe's System One Model — width.ai</a></li>
+    <li><a href="https://www.mindstudio.ai/blog/jev-system-one-model-launch" target="_blank" rel="noopener">Jev Explained: Typesafe AI's Non-Autoregressive System-1 Model — MindStudio</a></li>
+    <li><a href="https://www.mindstudio.ai/blog/jev-computer-use-minecraft-robotics-demos" target="_blank" rel="noopener">Jev AI Tested: Voice Computer Control, Minecraft, and Robot Arms — MindStudio</a></li>
+    <li><a href="https://madewithjev.com/tools" target="_blank" rel="noopener">Jev tools directory — madewithjev.com</a></li>
+  </ul>
+</footer>
+
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral" });
+</script>
+</body>
+</html>
