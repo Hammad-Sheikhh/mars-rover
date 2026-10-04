@@ -183,7 +183,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | # | Milestone | Needs hardware? | Done when |
 |---|---|---|---|
 | 0 | **This spec** | No | Merged. |
-| 1 | **Easy setup**: `WIFI_SSID`/`WIFI_PASS` in `.env`, the `earth_station.secrets` helper with token generation, the `--check` command, README Quick Start rewritten. ✅ Built (PR on `feat/easy-setup`); `--check` uses `ROVER_URL`/`CAMERA_URL` until milestone 2 adds the finder. | No | A fresh clone on another laptop goes from zero to `--sim` by following the README alone. |
+| 1 | **Easy setup**: `WIFI_SSID`/`WIFI_PASS` in `.env`, the `earth_station.secrets` helper with token generation, the `--check` command, README Quick Start rewritten. ✅ Built (PR #8); `--check` uses `ROVER_URL`/`CAMERA_URL` until milestone 2 adds the finder. | No | A fresh clone on another laptop goes from zero to `--sim` by following the README alone. |
 | 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
 | 3 | **Rover firmware: Jev Auto** (R1–R6). 🧪 Written; waiting for the hardware test. | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
 | 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. | Teammate tests | Same as 3. |

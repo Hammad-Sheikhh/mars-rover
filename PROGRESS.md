@@ -18,7 +18,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
 | Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
-| Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 built (PR on `feat/easy-setup`) |
+| Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 built (PR #8) |
 | Finding the boards automatically | ⏳ Milestone 2 (laptop only) |
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
@@ -47,7 +47,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Merge the milestone 1 pull request (easy setup).
+1. Merge PR #8 (milestone 1, easy setup) once CI is green.
 2. **Update your own `.env`:** it still uses the old names. Rename `ROVER_WIFI_SSID` to `WIFI_SSID` and `ROVER_WIFI_PASS` to `WIFI_PASS` (set them to the phone hotspot), and delete the `CAM_WIFI_...` lines. Then `python -m earth_station.secrets` and `python -m earth_station --check`.
 3. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them `rover1/secrets.h` (or just the rover token) **privately**.
 4. Teammate: flash firmware 2.1 and run the hardware checklist in PR #7.
