@@ -63,6 +63,26 @@ curl "http://127.0.0.1:8081/mode?set=manual"   # terminal 3: press a phone butto
 curl "http://127.0.0.1:8081/mode?set=jev"      #             press Jev Auto again
 ```
 
+## Connect the real Jev
+
+This works with the simulator, so you can do it before you have the rover.
+
+1. Get a key: sign in at [console.typesafe.ai/keys](https://console.typesafe.ai/keys) and create an API key. Copy it.
+2. Open `.env` in the repo folder and set:
+   ```sh
+   JEV_MODE=live
+   JEV_API_KEY=<paste your key here>
+   ```
+   Save the file. `.env` never goes to GitHub, so the key stays private. Never paste it into code, issues or chat.
+3. Test it with the fake rover (internet needed, no rover):
+   ```sh
+   python -m earth_station --sim
+   ```
+   The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
+4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
+
+The request and reply follow TypeSafe's [API reference](https://docs.typesafe.ai/api). The tests in `tests/test_jev_client.py` check our code against its examples.
+
 ## Run it with the real rover
 
 1. Put the rover, the camera and the laptop on **the same WiFi router**. Set `WIFI_SSID` and `WIFI_PASS` in both `secrets.h` files.
@@ -91,7 +111,9 @@ Every setting has a working default for the simulator. See `.env.example` for th
 |---|---|---|
 | `ROVER_URL` / `CAMERA_URL` | `http://127.0.0.1:8081` / `:8082` | Board addresses on your router |
 | `ROVER_CMD_TOKEN` | `sim-token` | Shared secret for `/jev/cmd`. Must match the rover's `secrets.h` |
-| `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_URL`, `JEV_API_KEY`) |
+| `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_KEY`) |
+| `JEV_API_KEY` | empty | Your key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys) |
+| `JEV_API_URL` / `JEV_MODEL` | `https://api.typesafe.ai/v1/systemone` / `jev-latest` | Usually leave as they are |
 | `DESCRIBE_MODE` | `mock` | `mock` or `live` (the teammate's vision model, needs `VISION_API_KEY`) |
 | `DECIDE_EVERY_MS` | `500` | How often Jev is asked |
 | `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
@@ -180,7 +202,7 @@ Rover rules:
 ## Tests
 
 ```sh
-pytest           # 26 tests: safety rules, wording, parsing, full loop on the simulator
+pytest           # 32 tests: safety rules, wording, parsing, full loop on the simulator
 ruff check .     # lint
 ```
 
@@ -190,4 +212,3 @@ CI runs both on every pull request.
 
 * **Rover firmware** for the protocol above. It's the next PR.
 * **`describe.py` live mode**, for the teammate. Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.
-* **Live Jev.** The request shape follows public write-ups. Confirm the field names in Typesafe's docs. If parsing fails, only `_parse_choice` and `_parse_noul` in `jev_client.py` need changing.
