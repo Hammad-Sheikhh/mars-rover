@@ -26,6 +26,16 @@ The team is new to this domain and to GitHub. **Explain as you go.**
 * **Teach as we build.** The project leader built the first version with AI help and wants to understand it now. When you finish a milestone, add a short "What you learned" recap: 3–5 bullets on how that piece works and why it's built that way.
 * Explain **robotics and hardware** ideas the same way you explain git: what a board, firmware, flashing, the Serial monitor, a watchdog or mDNS is, the first time each one comes up.
 
+## Tell the person when to clear the chat
+
+Long chats make Claude more likely to mix things up or "remember" things wrongly. At a suitable moment, **suggest typing `/clear`** to start a fresh chat:
+
+* after a milestone or pull request is finished;
+* before switching to an unrelated task;
+* when the chat has become long (many steps, big files read, several topics).
+
+Before suggesting it, update `PROGRESS.md` (and `SPEC.md` if the plan changed) so nothing is lost: the next chat reads them automatically. In one sentence, say why now is a good moment and that the diary is up to date. Never suggest it in the middle of a task.
+
 ## The plan: SPEC.md
 
 `SPEC.md` is the project plan: requirements, the target setup procedure, and the milestones in build order.
