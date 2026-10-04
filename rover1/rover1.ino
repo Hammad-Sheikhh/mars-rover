@@ -7,6 +7,7 @@
 #include <DHT.h>
 #include <HTTPClient.h> 
 #include <MPU6050_tockn.h> // NEW: IMU Library
+#include <ESPmDNS.h>        // lets the laptop find us as rover.local
 #include "secrets.h"        // credentials (git-ignored) - copy secrets.example.h to secrets.h
 // ---------- WiFi Station (for internet) ---------- // NEW
 const char* wifiSSID = WIFI_SSID;
@@ -21,6 +22,17 @@ const unsigned long sendIntervalMs = 5000; // Send every 5 seconds
 const char* apSSID = AP_SSID;
 const char* apPass = AP_PASS;
 WebServer server(80);                   // class/object/port 80 is standard path for http traffic
+// ---------- Jev Auto (the Earth Station laptop drives) ----------
+#ifndef ROVER_CMD_TOKEN
+#error "Add ROVER_CMD_TOKEN to rover1/secrets.h (see secrets.example.h)"
+#endif
+const char* roverCmdToken = ROVER_CMD_TOKEN;  // laptop must send this in the X-Token header
+const char* FIRMWARE_VERSION = "2.1.0";
+const char* MDNS_NAME = "rover";              // reachable as http://rover.local on the hotspot
+const unsigned long JEV_WATCHDOG_MS = 1500;   // no command for this long -> stop
+const unsigned long JEV_MAX_MOVE_MS = 500;    // longest single move
+const long JEV_MIN_FORWARD_CM = 20;           // never drive forward closer than this
+const unsigned long DISTANCE_EVERY_MS = 60;   // background ultrasonic sampling
 // ---------- Motor Pins ----------
 const int ENA = 23;
 const int IN1 = 22;
@@ -55,6 +67,18 @@ float baselineAltitudeM = 0.0; //
 // ---------- Behavior ----------
 volatile bool autonomousEnabled = false;
 volatile bool roverMoving = false;         // for the simple forward button
+volatile bool jevEnabled = false;          // Jev Auto: moves come from the laptop
+bool hasLastJevSeq = false;                // to ignore a retried command
+long lastJevSeq = 0;
+unsigned long lastJevCmdMs = 0;            // watchdog timer
+bool jevMoving = false;                    // a Jev move is running
+String jevAction = "stop";
+unsigned long jevMoveStartMs = 0;
+unsigned long jevMoveMs = 0;
+long distSamples[3] = {-1, -1, -1};        // last 3 ultrasonic readings
+int distIndex = 0;
+long lastDistanceCm = -1;                  // median of distSamples, -1 = no echo
+unsigned long lastDistanceMs = 0;
 const int FORWARD_SPEED = 200;
 const int SAFE_DISTANCE_CM = 40;
 const int DEFAULT_SPEED = 180;
@@ -75,6 +99,17 @@ void leftTurn(int speed);
 void rightTurn(int speed);
 void stopMotors();
 void sendDataToSupabase(); // Function to send sensor data to Supabase
+void handleStartJev();
+void handleJevCmd();
+void handleId();
+void setJevMode(bool on);
+void jevLoop();
+void runJevMove(const String& action, int speed, unsigned long ms);
+void stopJevMove();
+bool isTilted();
+void sampleDistance();
+long medianOf3(long a, long b, long c);
+String roverMode();
 void setup() {
   Serial.begin(115200);
   delay(100);
@@ -123,6 +158,7 @@ The "Correction": This average is saved as the Offset. From now on, every time t
     Serial.println("BMP280 not found (0x76/0x77).");
   }
   // NEW: Set WiFi to dual mode (AP + Station)
+  WiFi.setHostname(MDNS_NAME);
   WiFi.mode(WIFI_AP_STA);         // key word for ap + station mode 
   // NEW: Connect to WiFi (station mode) for internet
   WiFi.begin(wifiSSID, wifiPass);
@@ -135,6 +171,12 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   }
   if (WiFi.status() == WL_CONNECTED) {    // checks if esp is connected to wifi 
     Serial.println("\nWiFi station connected. IP: " + WiFi.localIP().toString());  // print ip
+    if (MDNS.begin(MDNS_NAME)) {           // announce rover.local so nobody types the IP
+      MDNS.addService("http", "tcp", 80);
+      Serial.println("Name: http://rover.local");
+    } else {
+      Serial.println("mDNS failed - use the IP above");
+    }
   } else {
     Serial.println("\nWiFi station connection failed. Data sending disabled.");
   }
@@ -146,7 +188,13 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   server.on("/startnav", HTTP_GET, handleStartNavigation);//individual buttons
   server.on("/startstop", HTTP_GET, handleStartStopRover);
   server.on("/sensors/data", HTTP_GET, handleSensorsData);
+  server.on("/startjev", HTTP_GET, handleStartJev);
+  server.on("/jev/cmd", HTTP_POST, handleJevCmd);
+  server.on("/id", HTTP_GET, handleId);
   server.onNotFound(notFound);
+  const char* headerKeys[] = {"X-Token"};   // WebServer only keeps headers we ask for
+  server.collectHeaders(headerKeys, 1);
+  if (strlen(roverCmdToken) < 8) Serial.println("WARNING: ROVER_CMD_TOKEN is under 8 characters - Jev commands will be refused");
   server.begin();
   Serial.println("HTTP server started");
 }
@@ -154,6 +202,7 @@ void loop() {
   server.handleClient();
   // 1. Refresh IMU data
   mpu.update();
+  sampleDistance();   // keeps distance_cm fresh for telemetry and the Jev vetoes
 
   // 2. LDR LED logic
   int ldrState = digitalRead(LDR_PIN);
@@ -176,6 +225,9 @@ lastAccX = curX; lastAccY = curY;
   // Detect Events for logging (Doesn't affect movement)
   if (abs(p) > ROLLOVER_LIMIT || abs(r) > ROLLOVER_LIMIT) lastEvent = "Tilt Warning";  // abs means distance from zero
   else if (abs(curX - lastAccX) > IMPACT_THRESHOLD) lastEvent = "Impact Detected";
+
+  // Jev Auto: finish moves on time, watchdog, reflexes (never blocks)
+  if (jevEnabled) jevLoop();
 
   // 4. Autonomous behavior (Simple Ultrasonic Only)
   if (autonomousEnabled) {
@@ -303,6 +355,12 @@ void handleRoot() {
       border-color: var(--accent);
       box-shadow: 0 0 20px rgba(0, 209, 178, 0.4);
     }
+    .jev-btn.active {
+      background: #9b5cff;
+      color: #000;
+      border-color: #9b5cff;
+      box-shadow: 0 0 20px rgba(155, 92, 255, 0.4);
+    }
     .sensor-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -339,12 +397,13 @@ void handleRoot() {
 <body>
   <div class="container">
     <header>
-      <h1>MARS ROVER <span class="badge">V2.0</span></h1>
+      <h1>MARS ROVER <span class="badge">V2.1</span></h1>
     </header>
 
     <div class="card">
       <button id="navBtn" class="btn nav-btn" onclick="toggleNav()">Initiate Autonomy</button>
       <button id="goBtn" class="btn go-btn" onclick="toggleGo()">Manual Propulsion</button>
+      <button id="jevBtn" class="btn jev-btn" onclick="toggleJev()">Jev Auto</button>
       <div class="status-panel">
         <div>COMMS: <span class="dot live"></span>STABLE</div>
         <div>MODE: <span id="modeDisplay">MANUAL</span></div>
@@ -388,7 +447,11 @@ void handleRoot() {
           <div class="label">Roll</div>
           <div class="value"><span id="roll">--</span><span class="unit">°</span></div>
         </div>
-        <div class="sensor-item" style="grid-column: span 2">
+        <div class="sensor-item">
+          <div class="label">Obstacle</div>
+          <div class="value" id="distance">--</div>
+        </div>
+        <div class="sensor-item">
           <div class="label">Terrain Vibration</div>
           <div class="value" id="vibeStatus">SMOOTH</div>
         </div>
@@ -402,27 +465,42 @@ void handleRoot() {
 
     function send(path){ fetch(path).catch(e=>console.log('Telemetry interruption:',e)); }
 
+    let jevOn = false;
+
     function toggleNav(){
       navEnabled = !navEnabled;
+      jevOn = false;                 // any manual button leaves Jev Auto
       send('/startnav');
-      document.getElementById('navBtn').innerText = navEnabled ? 'Abort Autonomy' : 'Initiate Autonomy';
-      document.getElementById('navBtn').classList.toggle('active', navEnabled);
-      document.getElementById('modeDisplay').innerText = navEnabled ? 'AUTONOMOUS' : 'MANUAL';
-      if (navEnabled) roverGo = false; 
-      updateGoButton();
+      if (navEnabled) roverGo = false;
+      updateButtons();
     }
 
     function toggleGo(){
       if (navEnabled) return;
-      roverGo = !roverGo;
       send('/startstop');
-      updateGoButton();
+      if (jevOn) { jevOn = false; roverGo = false; }   // first press just leaves Jev Auto
+      else roverGo = !roverGo;
+      updateButtons();
     }
 
-    function updateGoButton(){
-      const btn = document.getElementById('goBtn');
-      btn.innerText = roverGo ? 'Halt Propulsion' : 'Manual Propulsion';
-      btn.classList.toggle('active', roverGo);
+    function toggleJev(){
+      jevOn = !jevOn;
+      send('/startjev');
+      if (jevOn) { navEnabled = false; roverGo = false; }
+      updateButtons();
+    }
+
+    function updateButtons(){
+      const nav = document.getElementById('navBtn');
+      nav.innerText = navEnabled ? 'Abort Autonomy' : 'Initiate Autonomy';
+      nav.classList.toggle('active', navEnabled);
+      const go = document.getElementById('goBtn');
+      go.innerText = roverGo ? 'Halt Propulsion' : 'Manual Propulsion';
+      go.classList.toggle('active', roverGo);
+      const jev = document.getElementById('jevBtn');
+      jev.innerText = jevOn ? 'Exit Jev Auto' : 'Jev Auto';
+      jev.classList.toggle('active', jevOn);
+      document.getElementById('modeDisplay').innerText = jevOn ? 'JEV AUTO' : (navEnabled ? 'AUTONOMOUS' : 'MANUAL');
     }
 
     async function fetchData(){
@@ -438,6 +516,13 @@ void handleRoot() {
         document.getElementById('roll').innerText = j.roll ? j.roll.toFixed(1) : '--';
         document.getElementById('vibeStatus').innerText = j.vibration > 0.08 ? 'ROUGH' : 'SMOOTH';
         document.getElementById('vibeStatus').style.color = j.vibration > 0.08 ? 'var(--mars-red)' : 'var(--accent)';
+        document.getElementById('distance').innerText = j.distance_cm >= 0 ? j.distance_cm + ' cm' : '--';
+        if (j.mode) {                      // the rover is the source of truth for the mode
+          jevOn = j.mode == 'jev';
+          navEnabled = j.mode == 'autonomy';
+          if (jevOn || navEnabled) roverGo = false;
+          updateButtons();
+        }
       } catch(e) {}
     }
 
@@ -450,12 +535,18 @@ void handleRoot() {
   server.send(200, "text/html", page);
 }
 void handleStartNavigation() {
+  if (jevEnabled) setJevMode(false);   // any manual button leaves Jev Auto
   autonomousEnabled = !autonomousEnabled;
   if (!autonomousEnabled) stopMotors();
   roverMoving = false; // reset manual forward when toggling nav
   server.send(200, "text/plain", autonomousEnabled ? "Navigation ON" : "Navigation OFF");
 }
 void handleStartStopRover() {
+  if (jevEnabled) {                    // any manual button leaves Jev Auto
+    setJevMode(false);
+    server.send(200, "text/plain", "Jev Auto off - rover stopped");
+    return;
+  }
   if (autonomousEnabled) {
     server.send(200, "text/plain", "Navigation active - ignored");
     return;
@@ -485,6 +576,9 @@ void handleSensorsData() {  // it actualy sends the readings in the design
   payload += ",\"roll\":" + String(mpu.getAngleY(), 1);
   payload += ",\"vibration\":" + String(vibrationScore, 3);
   payload += ",\"autonomous\":" + String(autonomousEnabled ? 1 : 0);
+  payload += ",\"distance_cm\":" + String(lastDistanceCm);
+  payload += ",\"mode\":\"" + roverMode() + "\"";
+  payload += ",\"last_event\":\"" + lastEvent + "\"";
   payload += "}";
   server.send(200, "application/json", payload);
 }
@@ -529,12 +623,22 @@ long getDistance() {
   long a = singleUltrasonicReading(); delay(6);
   long b = singleUltrasonicReading(); delay(6);
   long c = singleUltrasonicReading();
-  // median of three
+  return medianOf3(a, b, c);
+}
+long medianOf3(long a, long b, long c) {
   if (a > b) { long t = a; a = b; b = t; }
   if (b > c) { long t = b; b = c; c = t; }
   if (a > b) { long t = a; a = b; b = t; }
   if (b <= 0) return -1;
   return b;
+}
+// One reading every DISTANCE_EVERY_MS instead of three in a row, so loop() stays responsive
+void sampleDistance() {
+  if (millis() - lastDistanceMs < DISTANCE_EVERY_MS) return;
+  lastDistanceMs = millis();
+  distSamples[distIndex] = singleUltrasonicReading();
+  distIndex = (distIndex + 1) % 3;
+  lastDistanceCm = medianOf3(distSamples[0], distSamples[1], distSamples[2]);
 }
 // Function to collect sensors and send to Supabase
 void sendDataToSupabase() {
@@ -592,4 +696,152 @@ void sendDataToSupabase() {
     Serial.printf("Error sending to Supabase: %d\n", httpResponseCode);
   }
   http.end();
+}
+// ---------------- Jev Auto (Earth Station) ----------------
+// Protocol: docs/EARTH_STATION.md#rover-protocol. Reference implementation: earth_station/sim.py
+String roverMode() {
+  if (jevEnabled) return "jev";
+  if (autonomousEnabled) return "autonomy";
+  return "manual";
+}
+bool isTilted() {
+  return abs(mpu.getAngleX()) > ROLLOVER_LIMIT || abs(mpu.getAngleY()) > ROLLOVER_LIMIT;
+}
+void stopJevMove() {
+  stopMotors();
+  jevMoving = false;
+  jevAction = "stop";
+}
+void setJevMode(bool on) {
+  jevEnabled = on;
+  stopJevMove();
+  if (on) {
+    autonomousEnabled = false;
+    roverMoving = false;
+    hasLastJevSeq = false;        // forget the last seq when Jev Auto is switched on
+    lastJevCmdMs = millis();
+  }
+  Serial.println(on ? "Jev Auto ON" : "Jev Auto OFF");
+}
+void handleStartJev() {
+  setJevMode(!jevEnabled);
+  server.send(200, "text/plain", jevEnabled ? "Jev Auto ON" : "Jev Auto OFF");
+}
+void handleId() {
+  server.send(200, "application/json",
+              String("{\"board\":\"rover\",\"firmware\":\"") + FIRMWARE_VERSION + "\"}");
+}
+// Called every loop() while in Jev Auto
+void jevLoop() {
+  if (!jevMoving) return;
+  if (millis() - lastJevCmdMs > JEV_WATCHDOG_MS) {   // laptop went quiet
+    Serial.println("Jev watchdog: no command, stopping");
+    stopJevMove();
+    return;
+  }
+  if (millis() - jevMoveStartMs >= jevMoveMs) {      // move finished
+    stopJevMove();
+    return;
+  }
+  if (jevAction == "forward" && lastDistanceCm > 0 && lastDistanceCm < JEV_MIN_FORWARD_CM) {
+    lastEvent = "Obstacle Avoided";                  // reflex: something appeared ahead
+    stopJevMove();
+    return;
+  }
+  if (isTilted()) {
+    lastEvent = "Tilt Warning";
+    stopJevMove();
+  }
+}
+void runJevMove(const String& action, int speed, unsigned long ms) {
+  if (action == "forward") forward(speed);
+  else if (action == "reverse") backward(speed);
+  else if (action == "turn_left") leftTurn(speed);
+  else if (action == "turn_right") rightTurn(speed);
+  jevAction = action;
+  jevMoving = true;
+  jevMoveStartMs = millis();
+  jevMoveMs = ms;                 // jevLoop() stops the motors when time is up, no delay()
+}
+// Tiny JSON readers for the fixed /jev/cmd body: {"seq": 1, "action": "forward", "speed": 170, "duration_ms": 300}
+int jsonValueStart(const String& body, const char* key) {
+  String needle = String("\"") + key + "\"";
+  int i = body.indexOf(needle);
+  if (i < 0) return -1;
+  i = body.indexOf(':', i + needle.length());
+  if (i < 0) return -1;
+  i++;
+  while (i < (int)body.length() && isspace(body[i])) i++;
+  return i < (int)body.length() ? i : -1;
+}
+bool jsonLong(const String& body, const char* key, long& out) {
+  int i = jsonValueStart(body, key);
+  if (i < 0 || (body[i] != '-' && !isdigit(body[i]))) return false;
+  out = body.substring(i).toInt();
+  return true;
+}
+String jsonString(const String& body, const char* key) {
+  int i = jsonValueStart(body, key);
+  if (i < 0 || body[i] != '"') return "";
+  int end = body.indexOf('"', i + 1);
+  return end < 0 ? "" : body.substring(i + 1, end);
+}
+void sendJevReply(const String& seqText, bool ok, const char* field, const String& value) {
+  server.send(200, "application/json",
+              String("{\"ok\":") + (ok ? "true" : "false") + ",\"seq\":" + seqText +
+              ",\"" + field + "\":\"" + value + "\"}");
+}
+void handleJevCmd() {
+  if (strlen(roverCmdToken) < 8 || server.header("X-Token") != roverCmdToken) {
+    server.send(401, "application/json", "{\"ok\":false,\"refused\":\"bad_token\"}");
+    return;
+  }
+  String body = server.arg("plain");
+  if (body.length() == 0) {
+    server.send(400, "application/json", "{\"ok\":false,\"refused\":\"bad_json\"}");
+    return;
+  }
+  lastJevCmdMs = millis();        // feed the watchdog
+  long seq = 0;
+  bool hasSeq = jsonLong(body, "seq", seq);
+  String seqText = hasSeq ? String(seq) : "null";
+  String action = jsonString(body, "action");
+
+  if (!jevEnabled) { sendJevReply(seqText, false, "refused", "not_in_jev_mode"); return; }
+  if (action != "forward" && action != "turn_left" && action != "turn_right" &&
+      action != "reverse" && action != "stop") {
+    sendJevReply(seqText, false, "refused", "unknown_action");
+    return;
+  }
+  if (hasSeq && hasLastJevSeq && seq == lastJevSeq) {   // a retry of the last command
+    sendJevReply(seqText, true, "executed", "duplicate_ignored");
+    return;
+  }
+  if (hasSeq) { lastJevSeq = seq; hasLastJevSeq = true; }
+
+  long speed = 0, ms = 0;
+  jsonLong(body, "speed", speed);
+  jsonLong(body, "duration_ms", ms);
+  speed = constrain(speed, 0, 255);
+  ms = constrain(ms, 0, (long)JEV_MAX_MOVE_MS);
+
+  if (action == "stop") {
+    stopJevMove();
+    sendJevReply(seqText, true, "executed", "stop");
+    return;
+  }
+  if (isTilted()) {                                      // veto: tipping over
+    lastEvent = "Tilt Warning";
+    stopJevMove();
+    sendJevReply(seqText, false, "refused", "tilt");
+    return;
+  }
+  if (action == "forward" && lastDistanceCm > 0 && lastDistanceCm < JEV_MIN_FORWARD_CM) {
+    lastEvent = "Obstacle Avoided";                      // veto: too close ahead
+    stopJevMove();
+    sendJevReply(seqText, false, "refused", "obstacle_too_close");
+    return;
+  }
+  runJevMove(action, speed, ms);
+  sendJevReply(seqText, true, "executed", action);
 }

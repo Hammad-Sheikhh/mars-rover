@@ -86,8 +86,8 @@ The request and reply follow TypeSafe's [API reference](https://docs.typesafe.ai
 ## Run it with the real rover
 
 1. Put the rover, the camera and the laptop on **the same WiFi router**. Set `WIFI_SSID` and `WIFI_PASS` in both `secrets.h` files.
-2. Flash rover firmware that has Jev support. It must follow the [rover protocol](#rover-protocol) below.
-3. In `.env`, set `ROVER_URL` and `CAMERA_URL` to the IP addresses each board prints on the Serial monitor at boot, and set `ROVER_CMD_TOKEN` to the same value as in `rover1/secrets.h`.
+2. Flash `rover1` firmware 2.1 or newer (it has Jev Auto). Its `secrets.h` needs `ROVER_CMD_TOKEN`: a random value, 8+ characters, the same one as in the laptop's `.env`.
+3. In `.env`, set `ROVER_URL=http://rover.local` (the rover announces that name). If the laptop can't find that name, use the IP address the rover prints on the Serial monitor at boot instead. Set `CAMERA_URL` to the camera's IP, and `ROVER_CMD_TOKEN` to the same value as in `rover1/secrets.h`.
 4. Start in **suggest-only** mode first. It decides and logs, but never moves the rover:
    ```sh
    python -m earth_station --suggest
@@ -166,9 +166,13 @@ Each run writes `runs/<date>_<time>.jsonl`, one JSON object per line: every deci
 
 ## Rover protocol
 
-This is the contract the rover firmware must implement for Jev Auto. The simulator (`earth_station/sim.py`) already follows it, so use it as the reference.
+This is the contract between the Earth Station and the rover. `rover1/rover1.ino` (firmware 2.1) and the simulator (`earth_station/sim.py`) both follow it. Change all three together.
 
-**`GET /sensors/data`**: the existing reply, plus two fields:
+**`GET /id`**: `{"board": "rover", "firmware": "2.1.0"}` (the camera will answer `"camera"`). Used to recognise the boards on the network.
+
+**`GET /startjev`**: the **Jev Auto** button on the rover's control page. It switches Jev Auto on or off.
+
+**`GET /sensors/data`**: the existing reply, plus these fields:
 
 ```json
 { "distance_cm": 62, "mode": "jev", "pitch": 3.1, "roll": -1.2, "vibration": 0.04,
@@ -177,6 +181,7 @@ This is the contract the rover firmware must implement for Jev Auto. The simulat
 
 * `distance_cm`: latest ultrasonic median, or `-1` if there's no echo.
 * `mode`: `"manual"`, `"autonomy"` or `"jev"`. If the field is missing, the Earth Station treats the rover as manual and never drives it.
+* `last_event`: `Nominal`, `Obstacle Avoided`, `Tilt Warning` or `Impact Detected`.
 
 **`POST /jev/cmd`**: header `X-Token: <ROVER_CMD_TOKEN>`, body:
 
@@ -190,6 +195,9 @@ This is the contract the rover firmware must implement for Jev Auto. The simulat
 | `200 {"ok": false, "seq": 4182, "refused": "not_in_jev_mode"}` | Rover isn't in Jev Auto |
 | `200 {"ok": false, "seq": 4182, "refused": "obstacle_too_close"}` | Forward requested under 20 cm |
 | `200 {"ok": false, "seq": 4182, "refused": "tilt"}` | Pitch or roll over 35° |
+| `200 {"ok": false, "seq": 4182, "refused": "unknown_action"}` | `action` isn't one of the five |
+| `200 {"ok": true, "seq": 4182, "executed": "duplicate_ignored"}` | Same `seq` as the last command (a retry) |
+| `400 {"ok": false, "refused": "bad_json"}` | Empty body |
 | `401 {"ok": false, "refused": "bad_token"}` | Wrong or missing token |
 
 Rover rules:
@@ -198,11 +206,12 @@ Rover rules:
 * **Watchdog:** in Jev Auto, if no command has arrived for 1.5 s, stop the motors.
 * Run moves without `delay()`. Track the end time with `millis()` so the web server stays responsive.
 * Any manual button press (`/startnav`, `/startstop`) leaves Jev Auto.
+* While a move runs, the rover keeps checking: it stops early if something comes closer than 20 cm during `forward`, or if it tilts past 35°.
 
 ## Tests
 
 ```sh
-pytest           # 32 tests: safety rules, wording, parsing, full loop on the simulator
+pytest           # 33 tests: safety rules, wording, parsing, full loop on the simulator
 ruff check .     # lint
 ```
 
@@ -210,5 +219,6 @@ CI runs both on every pull request.
 
 ## Not done yet
 
-* **Rover firmware** for the protocol above. It's the next PR.
+* **Rover firmware on hardware.** The code is written and compiles in CI, but it hasn't been tested on the real rover yet.
+* **Camera** `cam.local` and `/id` ([SPEC.md](../SPEC.md) milestone 4).
 * **`describe.py` live mode** (project leader, [SPEC.md](../SPEC.md) milestone 5). Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.

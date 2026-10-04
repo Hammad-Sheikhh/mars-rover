@@ -7,6 +7,7 @@ It speaks the same protocol the real firmware will:
            POST /jev/cmd          {"seq","action","speed","duration_ms"} + X-Token
            GET  /mode?set=jev     pretend to press a button on the phone (jev | manual)
     camera GET  /capture          JPEG with the simulated scene in a comment segment
+    both   GET  /id               {"board": "rover" | "camera", "firmware": "sim"}
 """
 
 from __future__ import annotations
@@ -129,7 +130,9 @@ def _handler(world: World, token: str, role: str, verbose: bool):
 
         def do_GET(self):  # noqa: N802
             url = urlparse(self.path)
-            if role == "camera" and url.path == "/capture":
+            if url.path == "/id":
+                self._json(200, {"board": role, "firmware": "sim"})
+            elif role == "camera" and url.path == "/capture":
                 data = fake_jpeg(world.scene())
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
