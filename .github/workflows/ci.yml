@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  compile:
+    name: Compile ${{ matrix.sketch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sketch: rover1
+            fqbn: esp32:esp32:esp32
+          - sketch: cam1
+            fqbn: esp32:esp32:esp32cam
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use placeholder credentials
+        run: cp ${{ matrix.sketch }}/secrets.example.h ${{ matrix.sketch }}/secrets.h
+
+      - uses: arduino/compile-sketches@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}
+          platforms: |
+            - name: esp32:esp32
+              source-url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          sketch-paths: |
+            - ${{ matrix.sketch }}
+          libraries: |
+            - name: Adafruit BMP280 Library
+            - name: Adafruit Unified Sensor
+            - name: DHT sensor library
+            - name: MPU6050_tockn
+          enable-warnings-report: true

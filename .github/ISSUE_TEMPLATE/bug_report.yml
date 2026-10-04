@@ -1,0 +1,33 @@
+name: Bug report
+description: Something on the rover or camera is not working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "**Do not paste credentials, secrets.h contents, or Supabase keys.** For security issues use SECURITY.md instead."
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board
+      options: [rover1 (ESP32), cam1 (ESP32-CAM), Supabase, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened vs what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: serial
+    attributes:
+      label: Serial monitor output (redact SSIDs/keys)
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Commit / ESP32 core version
