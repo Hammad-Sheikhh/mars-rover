@@ -1,13 +1,11 @@
-# 🚀 Earth Station: Mars Rover Mission Control
+# 🚀 Mars Rover
 
 ![Supabase](https://img.shields.io/badge/Supabase-Integrated-green?style=flat-square&logo=supabase)
 ![ESP32](https://img.shields.io/badge/ESP32-Powered-blue?style=flat-square&logo=espressif)
-![n8n](https://img.shields.io/badge/AI_Workflow-n8n-FF6B6B?style=flat-square&logo=n8n)
-![Gemini](https://img.shields.io/badge/Intelligence-Gemini_1.5_Flash-8E44AD?style=flat-square&logo=google)
 
 **Chief Scientist: Hammad**
 
-A sophisticated, fully integrated Mars Rover exploration platform. This system autonomously navigates terrain with multi-sensor fusion, captures high-resolution visual measurements, and utilizes a multimodal AI agent to synthesize real-time scientific status reports. The mission is monitored via a premium "Earth Station" web dashboard.
+A two-board Mars rover. The main ESP32 drives the rover, avoids obstacles and logs sensor telemetry to Supabase. A separate ESP32-CAM captures images and uploads them to Supabase Storage. Each board also hosts its own WiFi access point with a local control/viewing page.
 
 ---
 
@@ -15,47 +13,44 @@ A sophisticated, fully integrated Mars Rover exploration platform. This system a
 
 ```mermaid
 graph TD
-    User((Scientist)) -->|Open| Dash[Earth Station Dashboard]
-    Dash -->|Trigger| n8n[n8n Workflow]
-    n8n -->|Analyze| AI[Gemini 1.5 Agent]
-    
     subgraph Mars Rover
-        ESP[ESP32 Main] -->|Telemetry| DB[(Supabase DB)]
-        CAM[ESP32-CAM] -->|Images| Stor[(Supabase Storage)]
+        ESP[ESP32 Main - rover1] -->|Telemetry every 5s| DB[(Supabase: sensor_readings)]
+        CAM[ESP32-CAM - cam1] -->|JPEG every 10s| Stor[(Supabase Storage: rover_images)]
+        CAM -->|Image URL| DB2[(Supabase: camera_captures)]
     end
-    
-    n8n <-->|Fetch Readings| DB
-    n8n <-->|Fetch Images| Stor
-    AI -->|Mission Report| Dash
+
+    Phone1((Operator)) -->|AP: ESP32-Car-AP| ESP
+    Phone2((Operator)) -->|AP: ESP32_CAM_MARS| CAM
 ```
+
+## ✅ Current Status
+
+| Component | Status |
+|---|---|
+| Rover firmware (`rover1/`) | ✅ Working |
+| Camera firmware (`cam1/`) | ✅ Working |
+| Supabase database + storage | ✅ Working |
+| AP mode — rover control page | ✅ Working |
+| AP mode — camera live view | ✅ Working |
+
+---
 
 ## 🛠 Features
 
-### 🤖 Planetary Rover (`rover1/`)
-*   **Dual-Core Processing**: Powered by ESP32 for simultaneous navigation and telemetry.
-*   **Autonomous Navigation**: Streamlined obstacle avoidance using Ultrasonic (HC-SR04) logic. (IR sensors removed for efficiency).
-*   **Precision Telemetry (MPU6050)**: Real-time **Pitch**, **Roll**, and **Vibration** (Terrain) monitoring using direct I2C registers.
-*   **Environmental Sensing**: Monitoring of Temperature, Humidity, Pressure, and Altitude (BMP280 + DHT11).
-*   **Guardian Mission Log**: Automated recording of `last_event` statuses (e.g., "Obstacle Avoided", "Tilt Warning", "Impact Detected").
-*   **Dual-Mode Connectivity**:
-    *   **AP Mode**: Creates local WiFi for low-latency manual control.
-    *   **Station Mode**: Uplinks data to Earth (Supabase Cloud).
+### 🤖 Rover (`rover1/rover1.ino`)
+*   **Autonomous Navigation**: Obstacle avoidance with an HC-SR04 ultrasonic sensor (median-of-3 filtering, back up and turn when closer than 40 cm).
+*   **Manual Mode**: Forward/stop toggle from the control page.
+*   **IMU Telemetry (MPU6050)**: Pitch, roll and terrain vibration via the `MPU6050_tockn` library, with gyro calibration on boot.
+*   **Environmental Sensing**: Temperature and humidity (DHT11), pressure and relative altitude (BMP280), day/night (LDR).
+*   **Event Log**: `last_event` field records `Obstacle Avoided`, `Tilt Warning`, `Impact Detected` or `Nominal`.
+*   **Dual-Mode WiFi**:
+    *   **AP Mode** (`ESP32-Car-AP`): Local control page at `http://192.168.4.1` with live telemetry.
+    *   **Station Mode**: Posts readings to Supabase `sensor_readings` every 5 seconds.
 
-### 👁 Visual Intelligence (`cam1/`)
-*   **ESP32-CAM**: Dedicated vision module.
-*   **Cloud Uplink**: Captures and uploads JPEGs directly to **Supabase Storage**.
-*   **Multimodal Fusion**: Images are now visually analyzed by the AI agent to describe terrain objects (furniture, rocks, etc.).
-
-### 🧠 Artificial Intelligence (`workflows/`)
-*   **n8n Workflow**: An advanced automation pipeline with multimodal vision support.
-*   **Generative AI**: Uses **Google Gemini 1.5 Flash**.
-*   **Stability Analysis**: Interprets IMU data to determine slope safety and terrain roughness.
-*   **Mission Health Scoring**: Automatically calculates a health percentage based on physical events and environmental safety.
-
-### 💻 Earth Station Dashboard (`dashboard/`)
-*   **Sci-Fi Interface**: A "Dark Mode" responsive web app.
-*   **Horizon Indicator**: New "Orientation & Stability" card showing live tilt and terrain status.
-*   **One-Click Reports**: Triggers the Chief Scientist AI agent on demand.
+### 👁 Camera (`cam1/cam1.ino`)
+*   **ESP32-CAM (AI Thinker)**: VGA JPEG capture (falls back to CIF if PSRAM is not available).
+*   **AP Mode** (`ESP32_CAM_MARS`): Live view page at `http://192.168.4.1`, refreshing every 3 seconds.
+*   **Cloud Uplink**: Uploads a JPEG to the `rover_images` bucket every 10 seconds and saves its public URL in `camera_captures`.
 
 ---
 
@@ -63,40 +58,55 @@ graph TD
 
 ```text
 mars-rover/
-├── dashboard/              # 🛰 Earth Station Interface
-├── workflows/              # 🧠 n8n AI Logic
-├── rover1/                 # 🤖 Main Rover Firmware (ESP32)
-└── cam1/                   # 👁 Camera Firmware (ESP32-CAM)
+├── rover1/
+│   └── rover1.ino      # 🤖 Main rover firmware (ESP32)
+├── cam1/
+│   └── cam1.ino        # 👁 Camera firmware (ESP32-CAM)
+├── .env.example        # Template for credentials / API endpoints
+└── README.md
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start
 
-### 1. Database Setup (Supabase)
-1.  **Database**: Create tables `sensor_readings` and `camera_captures`.
-2.  **Schema Expansion**: Add `pitch`, `roll`, `vibration`, and `last_event` columns to `sensor_readings`.
-3.  **Storage**: Create a public bucket `rover_images`.
+### 1. Supabase Setup
+1.  **Table `sensor_readings`**: columns `temperature`, `humidity`, `ldr_state`, `pressure`, `altitude`, `pitch`, `roll`, `vibration`, `last_event`.
+2.  **Table `camera_captures`**: column `image_url`.
+3.  **Storage**: create a public bucket `rover_images`.
 
-### 2. Firmware Deployment
-*   **Main Rover**: Open `rover1/rover1.ino`. Update `wifiSSID`, `wifiPass`, and Supabase credentials. Upload (SDA: 25, SCL: 26).
-*   **Camera**: Open `cam1/cam1.ino`. Update credentials. Upload Image size: VGA.
+### 2. Credentials
+Copy `.env.example` to `.env` and fill in your values for reference. The firmware does not read `.env` yet. Set the same values at the top of each `.ino` file.
 
-### 3. Intelligence Activation (n8n)
-1.  Import `workflows/mars_rover_report.json` into n8n.
-2.  Configure Supabase and Google Gemini credentials.
-3.  Ensure the agent has multimodal access to the image binary data.
+### 3. Firmware Deployment
+Requires **ESP32 Arduino core 3.x** (uses the pin-based `ledcAttach` API).
+
+*   **Rover**: Open `rover1/rover1.ino`, set WiFi and Supabase credentials, upload.
+    *   Libraries: `Adafruit BMP280`, `Adafruit Unified Sensor`, `DHT sensor library`, `MPU6050_tockn`.
+    *   I2C: SDA 25, SCL 26.
+*   **Camera**: Open `cam1/cam1.ino`, set WiFi and Supabase credentials, upload with board **AI Thinker ESP32-CAM** and PSRAM enabled.
+
+---
+
+## 📌 Pin Map (Rover)
+
+| Function | Pins |
+|---|---|
+| Motor driver | ENA 23, IN1 22, IN2 21, ENB 19, IN3 18, IN4 5 |
+| Ultrasonic | TRIG 32, ECHO 35 |
+| DHT11 | 27 |
+| LDR | 33 (LED indicator 4) |
+| I2C (MPU6050, BMP280) | SDA 25, SCL 26 |
 
 ---
 
 ## 🔧 Technology Stack
 
-*   **Hardware**: ESP32, ESP32-CAM, MPU6050 IMU, BMP280, DHT11, HC-SR04 Ultrasonic.
-*   **Firmware**: C++ (Arduino Framework).
+*   **Hardware**: ESP32, ESP32-CAM, MPU6050, BMP280, DHT11, HC-SR04, LDR module, L298N-style motor driver.
+*   **Firmware**: C++ (Arduino framework).
 *   **Backend**: Supabase (PostgreSQL + Storage).
-*   **AI/Logic**: n8n, LangChain, Google Gemini 1.5 Flash.
 
 ---
 
 ## 📜 License
-Distribute under MIT License. Open Source.
+MIT License.
