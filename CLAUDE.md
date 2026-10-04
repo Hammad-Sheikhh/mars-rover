@@ -2,6 +2,18 @@
 
 Guidance for Claude Code (and humans) working in this repository.
 
+## How to work with this team (read first)
+
+The team is new to this domain and to GitHub. **Explain as you go.**
+
+* **Before** each step, say in one or two plain sentences what you are about to do and why.
+* **After** each step, say what changed and what it means for the team.
+* **Explain every git and GitHub operation** as you do it, in everyday words: branch, commit, push, pull, pull request, review, merge, conflict, collaborator, repo visibility, CI checks. Name the button or exact command, and say what the person should see when it works.
+* When the person has to do something themselves (on github.com or in a terminal), give numbered click-by-click or command-by-command steps.
+* Define technical words the first time you use them. Prefer short analogies over jargon.
+* Give one clear recommendation, not a list of options, unless asked to compare.
+* Warn before anything hard to undo (making the repo public, force-pushing, deleting branches, merging), and explain the consequence.
+
 ## What this is
 
 Arduino firmware for a two-board Mars rover (both boards upload to Supabase), plus the **Earth Station**: a Python program on a laptop that lets the Jev AI drive the rover over local WiFi.
