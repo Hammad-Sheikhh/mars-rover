@@ -14,6 +14,18 @@ The team is new to this domain and to GitHub. **Explain as you go.**
 * Give one clear recommendation, not a list of options, unless asked to compare.
 * Warn before anything hard to undo (making the repo public, force-pushing, deleting branches, merging), and explain the consequence.
 
+## Keep the README current
+
+`README.md` is the project's front page on GitHub. **Every change must update it in the same commit or PR**, so the README always matches the code:
+
+* **Status table:** what works, what's in progress, what's next.
+* **Features:** new or changed behaviour of the rover, camera or Earth Station.
+* **Project structure:** new, moved or removed files and folders.
+* **Quick start / setup:** new steps, settings, commands or requirements.
+* **Architecture diagram:** new parts or connections.
+
+If a change truly doesn't affect the README, say so in the PR description. When reporting back, tell the person what changed in the README.
+
 ## What this is
 
 Arduino firmware for a two-board Mars rover (both boards upload to Supabase), plus the **Earth Station**: a Python program on a laptop that lets the Jev AI drive the rover over local WiFi.
