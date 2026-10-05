@@ -14,6 +14,7 @@ Thumbs.db
 # Secrets
 .env
 secrets.h
+secrets.h.bak
 
 # Earth Station (Python)
 .venv/

@@ -1,8 +1,10 @@
-// Copy this file to secrets.h (same folder) and fill in your values.
+// Easiest: put the hotspot details in the repo-root .env and run
+//   python -m earth_station.secrets
+// It writes secrets.h for both boards. Or copy this file to secrets.h (same folder) by hand.
 // secrets.h is git-ignored. Never commit real credentials.
 #pragma once
 
-// Station mode: the WiFi network with internet access (for Supabase uploads)
+// The phone hotspot that the rover, camera and laptop all join (2.4 GHz)
 #define WIFI_SSID         "your-wifi-name"
 #define WIFI_PASS         "your-wifi-password"
 
