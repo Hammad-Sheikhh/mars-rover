@@ -48,7 +48,8 @@ graph TD
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C) |
 | Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
-| Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2); the camera is found by name after milestone 4 |
+| Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
+| Camera name `cam.local` and `/id` (firmware 2.1) | 🧪 Written, compiles in CI; waiting for the hardware test ([SPEC.md](SPEC.md) milestone 4) |
 | Mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestone 6) |
 
 ---
@@ -70,6 +71,7 @@ graph TD
 ### 👁 Camera (`cam1/cam1.ino`)
 *   **ESP32-CAM (AI Thinker)**: VGA JPEG capture (falls back to CIF if PSRAM is not available).
 *   **AP Mode** (`ESP32_CAM_MARS`): Live view page at `http://192.168.4.1`, refreshing every 3 seconds.
+*   **Findable on the hotspot** (firmware 2.1): announces `cam.local` and answers `GET /id` with `{"board": "camera"}`, so the Earth Station finds it without an IP address. At boot it prints whether it joined the hotspot, its IP address and its name.
 *   **Cloud Uplink**: Uploads a JPEG to the `rover_images` bucket every 10 seconds and saves its public URL in `camera_captures`.
 
 ### 🛰 Earth Station (`earth_station/`)
@@ -174,8 +176,8 @@ Do this once per phone hotspot. You need the boards plugged into your computer w
    * **Camera**: open `cam1/cam1.ino`, choose board **AI Thinker ESP32-CAM** with PSRAM enabled, then **Upload**.
 
    Keep the rover still while it powers on: the gyro calibrates at boot.
-5. Open the **Serial monitor** (the magnifier icon, top right; set it to **115200 baud**). It shows the messages a board prints. Each board should say it joined WiFi and print its IP address. Write down the **camera's** IP address.
-6. In `.env`, set `CAMERA_URL=http://<camera IP address>`. Leave `ROVER_URL` empty: the Earth Station finds the rover by itself (by its name `rover.local`, or by scanning the hotspot). The camera is found the same way once its firmware gets a name (milestone 4).
+5. Open the **Serial monitor** (the magnifier icon, top right; set it to **115200 baud**). It shows the messages a board prints. Each board should say it joined the hotspot and print its IP address and its name (`rover.local`, `cam.local`). Write the addresses down, just in case.
+6. Leave `ROVER_URL` and `CAMERA_URL` in `.env` empty: the Earth Station finds the boards by itself (by their names `rover.local` / `cam.local`, or by scanning the hotspot). If step 7 says a board wasn't found, put the IP address from step 5 in `.env`, e.g. `CAMERA_URL=http://<camera IP address>`.
 7. Connect the laptop to the same hotspot, then run:
    ```sh
    python -m earth_station --check

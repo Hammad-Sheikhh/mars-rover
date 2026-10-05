@@ -32,9 +32,10 @@ FIX = {
     "in its Serial monitor. Is the laptop on the same hotspot? If it still isn't found "
     "(some phones keep devices apart), put the IP address the rover prints at boot "
     "in .env as ROVER_URL=http://<that address>",
-    "camera": "is it switched on and joined to the hotspot? Until the camera firmware gets "
-    "its name (milestone 4), put the IP address its Serial monitor shows at boot "
-    "in .env as CAMERA_URL=http://<that address>",
+    "camera": "is it switched on and joined to the hotspot? Look for 'Hotspot joined: yes' "
+    "in its Serial monitor (firmware 2.1 or newer; older camera firmware has no name, so "
+    "flash cam1 again). If it still isn't found, put the IP address the camera prints at "
+    "boot in .env as CAMERA_URL=http://<that address>",
 }
 
 

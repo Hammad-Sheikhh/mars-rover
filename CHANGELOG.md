@@ -5,6 +5,7 @@ Notable changes to this project. The format follows [Keep a Changelog](https://k
 ## [Unreleased]
 
 ### Added
+- **Camera name** (milestone 4, camera firmware 2.1): the camera announces `cam.local` and answers `GET /id` with `{"board": "camera", "firmware": "2.1.0"}`, so the Earth Station finds it without an IP address. At boot the Serial monitor shows whether it joined the hotspot, its IP address, its name, its AP address and the firmware version.
 - **Board finder** (milestone 2): the Earth Station, `--check` and `earth_station.drive` find the rover and camera by themselves: the address in `.env`, then a simulator on this laptop, then `rover.local` / `cam.local` (its own mDNS lookup), then a scan of the hotspot that asks each address `GET /id`. When a board isn't found, it says where it looked.
 - **Easy setup** (milestone 1): the hotspot name and password go once into `.env` (`WIFI_SSID`, `WIFI_PASS`). `python -m earth_station.secrets` writes both boards' `secrets.h` from it and makes a random rover token. `python -m earth_station --check` tests the settings files, rover, camera and Jev, and says how to fix each problem.
 - **Rover Jev Auto mode** (firmware 2.1): a Jev Auto button, `POST /jev/cmd` with an `X-Token` check, a 1.5 s watchdog, tilt and 20 cm forward vetoes, and moves timed with `millis()`. `/sensors/data` adds `distance_cm`, `mode` and `last_event`. New `GET /id`, `GET /startjev`, and the `rover.local` name. The control page shows the obstacle distance. **The rover's `secrets.h` needs a new `ROVER_CMD_TOKEN` line.**

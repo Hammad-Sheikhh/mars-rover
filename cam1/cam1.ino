@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <ESPmDNS.h>        // lets the laptop find us as cam.local
 #include <WiFiClientSecure.h>
 #include <esp_camera.h>
 #include <esp_timer.h>
@@ -6,6 +7,10 @@
 #include <HTTPClient.h>
 #include <time.h>
 #include "secrets.h" // credentials (git-ignored) - copy secrets.example.h to secrets.h
+
+/* ================= IDENTITY ================= */
+const char* FIRMWARE_VERSION = "2.1.0";
+const char* MDNS_NAME = "cam";                // reachable as http://cam.local on the hotspot
 
 /* ================= WIFI ================= */
 const char* ssid_sta = WIFI_SSID;
@@ -101,6 +106,13 @@ esp_err_t capture_handler(httpd_req_t *req) {
     return res;
 }
 
+// Tells the Earth Station's network scan which board this is
+esp_err_t id_handler(httpd_req_t *req) {
+    String body = String("{\"board\":\"camera\",\"firmware\":\"") + FIRMWARE_VERSION + "\"}";
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, body.c_str(), body.length());
+}
+
 /* ================= WEB SERVER ================= */
 void start_web_server() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -109,6 +121,8 @@ void start_web_server() {
     httpd_register_uri_handler(server, &index_uri);
     httpd_uri_t capture_uri = { "/capture", HTTP_GET, capture_handler };
     httpd_register_uri_handler(server, &capture_uri);
+    httpd_uri_t id_uri = { "/id", HTTP_GET, id_handler };
+    httpd_register_uri_handler(server, &id_uri);
 }
 
 /* ================= TIMER ================= */
@@ -277,6 +291,7 @@ void setup() {
     s->set_contrast(s, 1);
     s->set_saturation(s, 0);
 
+    WiFi.setHostname(MDNS_NAME);
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(ssid_ap, password_ap);
     WiFi.begin(ssid_sta, password_sta);
@@ -288,11 +303,21 @@ void setup() {
         Serial.print(".");
         attempts++;
     }
+    Serial.println();
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nWiFi Connected! IP: " + WiFi.localIP().toString());
+        Serial.println("Hotspot joined: yes");
+        Serial.println("IP: " + WiFi.localIP().toString());
+        if (MDNS.begin(MDNS_NAME)) {           // announce cam.local so nobody types the IP
+            MDNS.addService("http", "tcp", 80);
+            Serial.println("Name: http://cam.local");
+        } else {
+            Serial.println("mDNS failed - use the IP above");
+        }
     } else {
-        Serial.println("\nERROR: Connect Failed! Uploads will fail.");
+        Serial.println("Hotspot joined: NO - check WIFI_SSID/WIFI_PASS in secrets.h. Uploads will fail.");
     }
+    Serial.print("AP IP: "); Serial.println(WiFi.softAPIP());
+    Serial.printf("Firmware: %s\n", FIRMWARE_VERSION);
 
     start_web_server();
     Serial.println("Web server ready");

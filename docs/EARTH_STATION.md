@@ -86,8 +86,8 @@ The request and reply follow TypeSafe's [API reference](https://docs.typesafe.ai
 ## Run it with the real rover
 
 1. Put the rover, the camera and the laptop on **the same phone hotspot**. Type its name and password once in `.env` (`WIFI_SSID`, `WIFI_PASS`, plus `ROVER_AP_PASS` and `CAM_AP_PASS`), then run `python -m earth_station.secrets`. It writes both boards' `secrets.h` from `.env` and makes the shared `ROVER_CMD_TOKEN`.
-2. Flash `rover1` firmware 2.1 or newer (it has Jev Auto) and the camera.
-3. Leave `ROVER_URL` empty: the Earth Station **finds the boards itself** (see [Finding the boards](#finding-the-boards)). Until the camera firmware gets its name (milestone 4), set `CAMERA_URL` to the IP address the camera prints on its Serial monitor at boot.
+2. Flash `rover1` firmware 2.1 or newer (it has Jev Auto) and `cam1` firmware 2.1 or newer (it has `cam.local` and `/id`).
+3. Leave `ROVER_URL` and `CAMERA_URL` empty: the Earth Station **finds the boards itself** (see [Finding the boards](#finding-the-boards)). If a board isn't found, set its URL to the IP address it prints on its Serial monitor at boot.
    Then run `python -m earth_station --check`: every line should say OK.
 4. Start in **suggest-only** mode first. It decides and logs, but never moves the rover:
    ```sh
@@ -182,7 +182,7 @@ Each run writes `runs/<date>_<time>.jsonl`, one JSON object per line: every deci
 
 This is the contract between the Earth Station and the rover. `rover1/rover1.ino` (firmware 2.1) and the simulator (`earth_station/sim.py`) both follow it. Change all three together.
 
-**`GET /id`**: `{"board": "rover", "firmware": "2.1.0"}` (the camera will answer `"camera"`). Used to recognise the boards on the network.
+**`GET /id`**: `{"board": "rover", "firmware": "2.1.0"}`. The camera (`cam1` firmware 2.1) answers `{"board": "camera", "firmware": "2.1.0"}`. Used to recognise the boards on the network.
 
 **`GET /startjev`**: the **Jev Auto** button on the rover's control page. It switches Jev Auto on or off.
 
@@ -234,5 +234,5 @@ CI runs both on every pull request.
 ## Not done yet
 
 * **Rover firmware on hardware.** The code is written and compiles in CI, but it hasn't been tested on the real rover yet.
-* **Camera** `cam.local` and `/id` ([SPEC.md](../SPEC.md) milestone 4).
+* **Camera `cam.local` and `/id` on hardware** ([SPEC.md](../SPEC.md) milestone 4). Written (firmware 2.1) and compiled in CI; waiting for the teammate's test.
 * **`describe.py` live mode** (project leader, [SPEC.md](../SPEC.md) milestone 5). Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.

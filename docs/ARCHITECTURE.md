@@ -57,7 +57,8 @@ Control loop: a single `loop()` with no RTOS tasks. The autonomous avoidance seq
 | Concern | Implementation |
 |---|---|
 | Capture | VGA JPEG with PSRAM. Falls back to CIF with a single DRAM frame buffer when PSRAM is missing |
-| Local UI | `esp_http_server`: `/` (page), `/capture` (one JPEG). The page polls every 3 s |
+| Local UI | `esp_http_server`: `/` (page), `/capture` (one JPEG), `/id` (JSON). The page polls every 3 s |
+| Network name | Announces `cam.local` (mDNS) once it has joined the WiFi network |
 | Upload | An `esp_timer` sets a flag every 10 s. `loop()` then captures, uploads to Storage, and inserts the public URL into `camera_captures` |
 | Flash LED | GPIO 4 lights up while a frame is captured |
 
