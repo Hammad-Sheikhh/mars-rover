@@ -48,7 +48,8 @@ graph TD
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C) |
 | Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
-| Board finder, mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestones 2, 6) |
+| Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2); the camera is found by name after milestone 4 |
+| Mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestone 6) |
 
 ---
 
@@ -79,6 +80,7 @@ graph TD
 *   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
 *   **One place for the hotspot**: type the hotspot name and password once in `.env`; `python -m earth_station.secrets` writes both boards' `secrets.h` from it and makes the rover token.
 *   **Check command**: `python -m earth_station --check` tests the settings files, the rover, the camera and Jev, and says in plain words how to fix each problem. Nothing moves.
+*   **Finds the boards by itself**: looks for `rover.local` / `cam.local` with its own mDNS lookup (so it works the same on Windows, Mac and Linux), then scans the hotspot asking each address `GET /id`. `ROVER_URL` / `CAMERA_URL` in `.env` are only needed as an override.
 
 Full guide: [docs/EARTH_STATION.md](docs/EARTH_STATION.md). Design walkthrough: open [docs/design/earth-station-plan.html](docs/design/earth-station-plan.html) in a browser.
 
@@ -96,6 +98,8 @@ mars-rover/
 │   └── secrets.example.h     # Credential template -> copy to secrets.h
 ├── earth_station/            # 🛰 Laptop ground station (Python) + rover simulator
 │   ├── secrets.py            # Writes both boards' secrets.h from .env, makes the rover token
+│   ├── finder.py             # Finds the rover and camera: .env, simulator, .local name, network scan
+│   ├── mdns.py               # Looks up rover.local / cam.local itself (mDNS)
 │   └── check.py              # `--check`: tests every piece, says how to fix it
 ├── tests/                    # Earth Station tests (pytest)
 ├── scripts/                  # One-command setup: setup.ps1 (Windows), setup.sh (Mac/Linux)
@@ -171,12 +175,12 @@ Do this once per phone hotspot. You need the boards plugged into your computer w
 
    Keep the rover still while it powers on: the gyro calibrates at boot.
 5. Open the **Serial monitor** (the magnifier icon, top right; set it to **115200 baud**). It shows the messages a board prints. Each board should say it joined WiFi and print its IP address. Write down the **camera's** IP address.
-6. In `.env`, set `CAMERA_URL=http://<camera IP address>`. Leave `ROVER_URL=http://rover.local`: the rover announces that name itself. (The camera gets a name in milestone 4.)
+6. In `.env`, set `CAMERA_URL=http://<camera IP address>`. Leave `ROVER_URL` empty: the Earth Station finds the rover by itself (by its name `rover.local`, or by scanning the hotspot). The camera is found the same way once its firmware gets a name (milestone 4).
 7. Connect the laptop to the same hotspot, then run:
    ```sh
    python -m earth_station --check
    ```
-   Every line should say `OK`. A line with `X` says what's wrong and how to fix it.
+   It first finds the boards: you should see `rover found at http://<address> (rover.local)` or `(network scan)`. Every line should say `OK`. A line with `X` says what's wrong, where it looked and how to fix it.
 8. Drive: `python -m earth_station --suggest` first (Jev only suggests, the rover never moves), then press **Jev Auto** on the rover's control page. More in [docs/EARTH_STATION.md](docs/EARTH_STATION.md#run-it-with-the-real-rover).
 
 If someone else flashes the rover, send them `rover1/secrets.h` (or just the token) **privately**, never on GitHub. The token in their `rover1/secrets.h` must equal `ROVER_CMD_TOKEN` in your `.env`; `--check` tells you if they differ.

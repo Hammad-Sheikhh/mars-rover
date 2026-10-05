@@ -18,8 +18,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
 | Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
-| Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 built (PR #8) |
-| Finding the boards automatically | ⏳ Milestone 2 (laptop only) |
+| Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
+| Finding the boards automatically | 🧪 Milestone 2 built and tested on the simulator (PR #9). The camera is found by name after milestone 4 |
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
 | Mission control page in the browser | ⏳ Milestone 6 |
@@ -40,6 +40,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **A mission control page** in the laptop's browser, with a big STOP button, alongside the terminal output.
 - **The leader builds the photo descriptions** with Claude vision, instead of the teammate. *Why:* it needs no hardware, and the teammate can focus on testing on the rover.
 - **`.env` is the one place for board settings** (2026-10-05). `python -m earth_station.secrets` writes both `secrets.h` files from it. *Why:* the two boards can never end up on different networks, and nobody has to invent a token.
+- **Board addresses in `.env` are optional** (2026-10-06). Empty means "find it": `.env`, then a simulator on this laptop, then `rover.local` / `cam.local`, then a scan of the hotspot. *Why:* nobody has to look up an IP address, and the same `.env` works on any hotspot.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **Claude explains every step and every GitHub action in beginner-friendly words** (see `CLAUDE.md`).
 
@@ -47,16 +48,30 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Merge PR #8 (milestone 1, easy setup) once CI is green.
-2. **Update your own `.env`:** it still uses the old names. Rename `ROVER_WIFI_SSID` to `WIFI_SSID` and `ROVER_WIFI_PASS` to `WIFI_PASS` (set them to the phone hotspot), and delete the `CAM_WIFI_...` lines. Then `python -m earth_station.secrets` and `python -m earth_station --check`.
-3. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them `rover1/secrets.h` (or just the rover token) **privately**.
-4. Teammate: flash firmware 2.1 and run the hardware checklist in PR #7.
-5. **Real Jev:** buy $5 of credits at console.typesafe.ai, create a key, and put it in `.env` with `JEV_MODE=live`.
-6. Milestones 2, 4, 5, 6: board finder, camera name, photo descriptions, mission control page.
+1. Merge PR #9 (milestone 2, board finder) once CI is green.
+2. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them `rover1/secrets.h` (or just the rover token) **privately**.
+3. Teammate: flash firmware 2.1 (with the new `rover1/secrets.h`) and run the hardware checklist in PR #7. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)`.
+4. **Real Jev:** buy $5 of credits at console.typesafe.ai, create a key, and put it in `.env` with `JEV_MODE=live`.
+5. Milestones 4, 5, 6: camera name (`cam.local`, `/id`), photo descriptions, mission control page.
 
 ---
 
 ## Session log
+
+### 2026-10-06 — Session 4: finding the boards (milestone 2)
+
+**What we did**
+1. **Merged PR #8** (milestone 1) after all 6 CI checks passed, and brought the laptop's `main` up to date.
+2. **Fixed our own `.env`:** renamed the WiFi settings to `WIFI_SSID` / `WIFI_PASS` and removed the old camera WiFi lines. Then we re-ran `earth_station.secrets` (both `secrets.h` updated) and `--check` (all settings OK).
+3. **Built the board finder** (`earth_station/finder.py`). For each board it tries the address in `.env`, then a simulator on this laptop, then the board's name, then a scan of the network asking every address "which board are you?" (`GET /id`).
+4. **Wrote our own `.local` lookup** (`earth_station/mdns.py`), so finding `rover.local` doesn't depend on Windows, Mac or Linux supporting it.
+5. **Connected the finder** to the normal run, `--check` and `earth_station.drive`. `ROVER_URL` / `CAMERA_URL` are now optional.
+6. **11 new tests** (57 in total), all against the simulator, with no real network. We also tried it for real on the laptop: without boards, `--check` scanned 253 addresses in about 11 seconds and said where it had looked. With the simulator running, it found the fake boards with nothing typed.
+7. Fixed `CHANGELOG.md`: the milestone 1 notes had been copied into the old 2.0 and 1.0 sections by mistake.
+
+**Things to remember**
+- The camera can only be found by name or scan after milestone 4 gives its firmware `cam.local` and `/id`. Until then, put its IP address in `CAMERA_URL`.
+- If a phone hotspot keeps devices apart, neither the name nor the scan can work. Then put the address from the Serial monitor in `.env`.
 
 ### 2026-10-05 — Session 3: easy setup (milestone 1)
 

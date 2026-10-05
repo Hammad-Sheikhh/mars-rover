@@ -87,7 +87,7 @@ The request and reply follow TypeSafe's [API reference](https://docs.typesafe.ai
 
 1. Put the rover, the camera and the laptop on **the same phone hotspot**. Type its name and password once in `.env` (`WIFI_SSID`, `WIFI_PASS`, plus `ROVER_AP_PASS` and `CAM_AP_PASS`), then run `python -m earth_station.secrets`. It writes both boards' `secrets.h` from `.env` and makes the shared `ROVER_CMD_TOKEN`.
 2. Flash `rover1` firmware 2.1 or newer (it has Jev Auto) and the camera.
-3. `ROVER_URL=http://rover.local` is the default in `.env.example` (the rover announces that name). If the laptop can't find that name, use the IP address the rover prints on the Serial monitor at boot instead. Set `CAMERA_URL` to the camera's IP.
+3. Leave `ROVER_URL` empty: the Earth Station **finds the boards itself** (see [Finding the boards](#finding-the-boards)). Until the camera firmware gets its name (milestone 4), set `CAMERA_URL` to the IP address the camera prints on its Serial monitor at boot.
    Then run `python -m earth_station --check`: every line should say OK.
 4. Start in **suggest-only** mode first. It decides and logs, but never moves the rover:
    ```sh
@@ -104,13 +104,26 @@ python -m earth_station.drive turn_left --ms 300 --speed 150
 python -m earth_station.drive stop
 ```
 
+## Finding the boards
+
+Nobody types an IP address. Before it starts, the Earth Station (and `--check` and `earth_station.drive`) looks for each board in this order, and the first hit wins:
+
+1. **The address in `.env`** (`ROVER_URL` / `CAMERA_URL`), if you set one.
+2. **The simulator on this laptop** (`python -m earth_station.sim`, ports 8081 and 8082).
+3. **Its name**, `rover.local` / `cam.local`. The Earth Station sends its own mDNS question ("who is rover.local?") and the board answers with its address, so this works the same on Windows, macOS and Linux. If nobody answers, it asks the operating system as well.
+4. **A network scan**: it asks every address on the laptop's network (a /24, about 254 addresses, 64 at a time) for `GET /id`.
+
+A board only counts if its `/id` says which board it is, so the scan can't mistake the camera, or a printer, for the rover. Finding takes a few seconds when the name works, and about 10 seconds when nothing is found. When it fails, the message lists every place it looked. Some phone hotspots keep devices from seeing each other: then neither the name nor the scan can work, and you can put the address from the Serial monitor in `.env`, or use a different phone (see [SPEC.md](../SPEC.md), open questions).
+
+The code is in `earth_station/finder.py` and `earth_station/mdns.py`, and `tests/test_finder.py` proves each step against the simulator.
+
 ## Settings (`.env`)
 
 Every setting has a working default for the simulator. See `.env.example` for the full list.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `ROVER_URL` / `CAMERA_URL` | `http://127.0.0.1:8081` / `:8082` | Board addresses on your router |
+| `ROVER_URL` / `CAMERA_URL` | empty | Board addresses. Empty means "find it"; set one only if the finder can't |
 | `ROVER_CMD_TOKEN` | `sim-token` | Shared secret for `/jev/cmd`. Must match the rover's `secrets.h` |
 | `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_KEY`) |
 | `JEV_API_KEY` | empty | Your key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys) |

@@ -1,6 +1,6 @@
 """Run the Earth Station.
 
-python -m earth_station              # talk to the boards in .env
+python -m earth_station              # find the boards on the hotspot and drive
 python -m earth_station --sim        # start the built-in simulator and use it
 python -m earth_station --suggest    # decide and log, but never send moves
 python -m earth_station --check      # test every piece and say how to fix it (add --sim to try)
@@ -14,14 +14,31 @@ import sys
 
 import httpx
 
-from . import check, config, sim
-from .logger import Logger
+from . import check, config, finder, sim
+from .logger import Logger, paint
 from .station import Station
 
 
-async def _amain(settings: config.Settings) -> int:
-    log = Logger(settings.log_dir)
+async def _find(settings: config.Settings, client: httpx.AsyncClient) -> config.Settings | None:
+    """Fill in the board addresses. None if a board can't be found (the fix is printed)."""
+    print(paint("Finding the boards", "blue") + " (a few seconds)")
+    settings, found = await finder.locate(settings, client)
+    for f in found.values():
+        print(f"  {paint('OK ', 'green') if f.ok else paint('X  ', 'red')} {f.line()}")
+        if not f.ok:
+            print(f"       {paint('fix:', 'yellow')} {f.fix}")
+    return settings if all(f.ok for f in found.values()) else None
+
+
+async def _amain(settings: config.Settings, *, find: bool) -> int:
     async with httpx.AsyncClient() as client:
+        if find:
+            located = await _find(settings, client)
+            if located is None:
+                print("\nBoards not found. Fix the items marked X and run again.")
+                return 1
+            settings = located
+        log = Logger(settings.log_dir)
         station = Station(settings, client, log)
         if not await station.preflight():
             print("\nPre-flight failed. Fix the items marked X and run again.")
@@ -68,7 +85,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(check.report(results, sim=a.sim))
 
     try:
-        code = asyncio.run(_amain(settings))
+        code = asyncio.run(_amain(settings, find=not a.sim))
     except KeyboardInterrupt:
         code = 0
     sys.exit(code)

@@ -10,13 +10,14 @@ The rover must be in Jev Auto mode (press the button on its AP page).
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 import time
 
 import httpx
 
-from . import config
+from . import config, finder
 from .links import ACTIONS
 
 
@@ -31,6 +32,7 @@ def main(argv: list[str] | None = None) -> None:
         s = config.load()
     except config.ConfigError as e:
         sys.exit(f"Settings problem: {e}")
+    s = asyncio.run(_find_rover(s))
 
     cmd = {
         "seq": int(time.time() * 1000) % 2_000_000_000,
@@ -46,6 +48,16 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(f"Could not reach the rover at {s.rover_url}: {e}")
     print(f"sent    {json.dumps(cmd)}")
     print(f"rover   HTTP {r.status_code} {r.text.strip()}")
+
+
+async def _find_rover(s: config.Settings) -> config.Settings:
+    async with httpx.AsyncClient() as client:
+        s, found = await finder.locate(s, client, boards=("rover",))
+    rover = found["rover"]
+    if not rover.ok:
+        sys.exit(f"{rover.line()}\nfix: {rover.fix}")
+    print(f"rover   {rover.line()}")
+    return s
 
 
 if __name__ == "__main__":
