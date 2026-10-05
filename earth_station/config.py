@@ -1,7 +1,8 @@
 """Settings, read from the repo-root .env file (git-ignored).
 
-Every setting has a default that points at the local simulator, so a fresh
-clone runs with no .env at all.
+Every setting has a simulator-friendly default, so a fresh clone runs with no
+.env at all. The board addresses default to empty, which means "find them"
+(finder.py): that also finds a simulator running on this laptop.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class Settings:
-    rover_url: str
+    rover_url: str  # empty: find it (finder.py)
     camera_url: str
     rover_cmd_token: str
 
@@ -75,8 +76,8 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
     load_dotenv(env_file or REPO_ROOT / ".env")
 
     s = Settings(
-        rover_url=_str("ROVER_URL", "http://127.0.0.1:8081").rstrip("/"),
-        camera_url=_str("CAMERA_URL", "http://127.0.0.1:8082").rstrip("/"),
+        rover_url=_str("ROVER_URL", "").rstrip("/"),
+        camera_url=_str("CAMERA_URL", "").rstrip("/"),
         rover_cmd_token=_str("ROVER_CMD_TOKEN", "sim-token"),
         jev_mode=_str("JEV_MODE", "mock").lower(),
         jev_api_url=_str("JEV_API_URL", "https://api.typesafe.ai/v1/systemone"),

@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 from dotenv import dotenv_values
 
-from . import secrets
+from . import finder, secrets
 from .config import REPO_ROOT, Settings
 from .describe import DescribeError, describe
 from .jev_client import JevClient, JevError
@@ -77,7 +77,7 @@ async def link_checks(s: Settings, client: httpx.AsyncClient) -> list[Result]:
 
     rover = RoverLink(client, s.rover_url, s.rover_cmd_token)
     try:
-        t = await rover.read()
+        t = await rover.read() if s.rover_url else None
     except LinkError:
         out.append(
             Result(
@@ -85,11 +85,13 @@ async def link_checks(s: Settings, client: httpx.AsyncClient) -> list[Result]:
                 f"rover not found at {s.rover_url}",
                 "is it switched on and joined to the hotspot? Look for "
                 "'WiFi station connected' in its Serial monitor. "
-                "Is the laptop on the same hotspot? ROVER_URL in .env should be http://rover.local",
+                "Is the laptop on the same hotspot?",
             )
         )
     else:
-        if "mode" not in t:
+        if t is None:  # not found: the finder already said so
+            pass
+        elif "mode" not in t:
             out.append(
                 Result(
                     False, "rover firmware has no Jev Auto", "flash rover1 firmware 2.1 or newer"
@@ -108,15 +110,16 @@ async def link_checks(s: Settings, client: httpx.AsyncClient) -> list[Result]:
 
     photo = None
     try:
-        photo = await CameraLink(client, s.camera_url).capture()
-        out.append(Result(True, f"camera answering at {s.camera_url} | {len(photo) / 1024:.1f} KB"))
+        if s.camera_url:
+            photo = await CameraLink(client, s.camera_url).capture()
+            kb = len(photo) / 1024
+            out.append(Result(True, f"camera answering at {s.camera_url} | {kb:.1f} KB"))
     except LinkError:
         out.append(
             Result(
                 False,
                 f"camera not found at {s.camera_url}",
-                "is it switched on and joined to the hotspot? Its Serial monitor shows its IP "
-                "address at boot: put it in .env as CAMERA_URL=http://<that address>",
+                "is it switched on and joined to the hotspot? Is CAMERA_URL in .env right?",
             )
         )
 
@@ -140,9 +143,17 @@ async def link_checks(s: Settings, client: httpx.AsyncClient) -> list[Result]:
     return out
 
 
+def found_results(found: dict[str, finder.Found]) -> list[Result]:
+    """One line per board: where the finder found it, or where it looked."""
+    return [Result(f.ok, f.line(), f.fix) for f in found.values()]
+
+
 async def run_checks(s: Settings, *, sim: bool, root: Path = REPO_ROOT) -> list[Result]:
     results = [] if sim else file_checks(s, root)
     async with httpx.AsyncClient() as client:
+        if not sim:
+            s, found = await finder.locate(s, client)
+            results += found_results(found)
         results += await link_checks(s, client)
     return results
 
