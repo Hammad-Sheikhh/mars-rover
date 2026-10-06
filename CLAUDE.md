@@ -20,6 +20,13 @@ Some steps only the leader can do (on github.com, in a terminal, buying credits,
 * Keep the list of manual tasks that are still open in Claude's memory, in the file `pending-manual-tasks.md` (outside the repo, so it's private).
 * **Keep reminding:** at the start of every session, and before suggesting `/clear`, list the open tasks and ask which ones are done. When the leader confirms one, remove it from that memory file. It may then be noted in the session log as done.
 * Tasks for the teammate (hardware tests) and milestones stay in `PROGRESS.md` as usual.
+* **Explain every task that is on the leader in detail**, every time you ask for it or remind about it. Never just name it or give a bare command. Say:
+  1. **What it is**, in plain words (define any new word).
+  2. **Why** it's needed and what it unlocks.
+  3. **Where** to do it: which app, website or window (VS Code terminal, Claude Code chat, github.com, the TypeSafe console).
+  4. **Numbered steps**: the exact buttons to click or commands to type, one per step.
+  5. **What they should see** when it worked, and what to do if they see an error.
+  6. **What it costs or risks**, if anything (money, something hard to undo, a secret to keep private).
 
 ## How to work with this team (read first)
 
