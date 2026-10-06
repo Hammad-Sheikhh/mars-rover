@@ -66,6 +66,17 @@ SCENE_SCHEMA = {
     "additionalProperties": False,
 }
 
+# What Jev reads for a real photo when nothing can look at it (DESCRIBE_MODE=mock).
+# It must never claim the way is clear (SPEC D5). obstacle_ahead stays false so
+# the distance sensor, not a guess, decides whether the rover may go forward.
+NO_VISION = {
+    "summary": "No camera vision (photo descriptions are off). "
+    "Judge what is ahead from the distance sensor only.",
+    "obstacle_ahead": False,
+    "clear_side": "none",
+    "hazards": [],
+}
+
 _clients: dict[str, anthropic.AsyncAnthropic] = {}
 
 
@@ -107,7 +118,7 @@ def validate_scene(scene: Any) -> dict[str, Any]:
 
 def _describe_mock(jpeg: bytes) -> dict[str, Any]:
     # The simulator's camera hides its scene in a JPEG comment segment so the
-    # whole loop can be tested offline. Real photos fall back to a neutral scene.
+    # whole loop can be tested offline. Real photos get NO_VISION.
     marker = b"SIMSCENE:"
     start = jpeg.find(marker)
     if start != -1:
@@ -116,12 +127,7 @@ def _describe_mock(jpeg: bytes) -> dict[str, Any]:
             return json.loads(jpeg[start + len(marker) : end if end != -1 else None])
         except ValueError:
             pass
-    return {
-        "summary": "No vision model connected; scene unknown.",
-        "obstacle_ahead": False,
-        "clear_side": "both",
-        "hazards": [],
-    }
+    return dict(NO_VISION)
 
 
 def _client(settings: Settings) -> anthropic.AsyncAnthropic:

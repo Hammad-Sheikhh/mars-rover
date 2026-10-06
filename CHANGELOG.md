@@ -23,6 +23,7 @@ Notable changes to this project. The format follows [Keep a Changelog](https://k
 - Issue templates, a PR template, CODEOWNERS and Dependabot for GitHub Actions.
 
 ### Changed
+- Without paid vision (`DESCRIBE_MODE=mock`), a real camera photo now tells Jev "No camera vision (photo descriptions are off). Judge what is ahead from the distance sensor only." It used to say the scene was unknown but also mark both sides as clear.
 - `.env`: one shared `WIFI_SSID`/`WIFI_PASS` replaces `ROVER_WIFI_*` and `CAM_WIFI_*`.
 - `ROVER_URL` and `CAMERA_URL` are now optional and empty by default, meaning "find the board".
 - README Quick Start reordered: just the laptop, then the real boards, then the real Jev, then Supabase (optional).
