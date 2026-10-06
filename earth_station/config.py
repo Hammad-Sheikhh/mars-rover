@@ -30,6 +30,7 @@ class Settings:
     jev_api_url: str
     jev_api_key: str
     jev_model: str
+    jev_max_calls: int  # live calls allowed per run, so a forgotten window can't spend credits
 
     describe_mode: str  # "mock" or "live" (Claude vision)
     vision_api_key: str  # Anthropic API key
@@ -86,6 +87,7 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         jev_api_url=_str("JEV_API_URL", "https://api.typesafe.ai/v1/systemone"),
         jev_api_key=_str("JEV_API_KEY", ""),
         jev_model=_str("JEV_MODEL", "jev-latest"),
+        jev_max_calls=_int("JEV_MAX_CALLS", 20),
         describe_mode=_str("DESCRIBE_MODE", "mock").lower(),
         vision_api_key=_str("VISION_API_KEY", ""),
         vision_model=_str("VISION_MODEL", "claude-opus-5-5"),
@@ -119,6 +121,8 @@ def validate(s: Settings) -> None:
         raise ConfigError(
             "JEV_MODE=live needs JEV_API_KEY in .env (get one at https://console.typesafe.ai/keys)"
         )
+    if s.jev_max_calls < 1:
+        raise ConfigError("JEV_MAX_CALLS must be 1 or more (live Jev calls allowed per run)")
     if s.describe_mode == "live" and not s.vision_api_key:
         raise ConfigError(
             "DESCRIBE_MODE=live needs VISION_API_KEY in .env "

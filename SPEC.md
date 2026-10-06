@@ -125,7 +125,8 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 |---|---|
 | J1 | `JEV_MODE=mock` stays the default. `live` uses the real Jev API with `JEV_API_URL` and `JEV_API_KEY` from `.env`. |
 | J2 | Jev picks one of `forward`, `turn_left`, `turn_right`, `reverse`, `stop`, with a confidence. |
-| J3 | The request format comes from public articles. Confirm it against Typesafe's own documentation once we have an account. |
+| J3 | The request format follows TypeSafe's own [API reference](https://docs.typesafe.ai/api) (checked 2026-10-06). |
+| J4 | **Spending guard** (2026-10-06): `--sim` uses the pretend Jev unless `--live-jev` is given; each run makes at most `JEV_MAX_CALLS` live calls (default 20), then stops the rover and ends; the run prints the calls and tokens used. Tests never call the real Jev. |
 
 ### 4.7 Rover firmware (Jev Auto)
 
@@ -190,7 +191,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. 🧪 Written (firmware 2.1); waiting for the hardware test. | Teammate tests | Same as 3. |
 | 5 | **Photo descriptions**: live `describe.py` using Claude vision. ✅ Code done, tested with a fake Claude. ⏸ Using it is paused: the API costs money, so we drive on sensors only for now (D5). | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
 | 6 | **Mission control page.** | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
-| 7 | **Live Jev.** ✅ Code done; waiting for a key ($5 minimum credits). | No (needs credits) | `--sim` runs with `JEV_MODE=live`. |
+| 7 | **Live Jev.** ✅ Code done, with a spending guard (J4). Credits bought; first live test next. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
 | 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
 
 **Live Jev (7) comes first**, because it's the heart of the project (decided 2026-10-05). Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai). After that, milestones 1, 2, 5 and 6 can be done in any order. Milestone 3 is the one the teammate is waiting for, so it's worth doing early.
@@ -207,7 +208,6 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | Question | How we'll answer it |
 |---|---|
 | Does `.local` work on our phone's hotspot? Some phones block devices from seeing each other. | Milestone 8. The network scan is the backup. If the phone blocks devices completely, use a different phone or a small travel router. |
-| Exact Jev request format | Typesafe's docs, once we have an account (milestone 7). |
 | A free way for the camera to help (no paid API) | Later, after the first real drive. Options: a small vision AI running on the laptop (for example with Ollama), or simple image rules such as "is the bottom of the photo mostly floor?". Measure speed on the teammate's sample photos. |
 | Is one description every 1.5 s fast enough to avoid obstacles? | The rover's own 20 cm forward veto covers us meanwhile. Measure it in milestone 8. |
 

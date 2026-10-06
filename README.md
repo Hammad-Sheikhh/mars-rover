@@ -45,7 +45,7 @@ graph TD
 | AP mode — camera live view | ✅ Working |
 | Earth Station (`earth_station/`) | 🧪 Runs on the simulator |
 | Rover Jev Auto mode (firmware 2.1) | 🧪 Written and compiles; waiting for a test on the real rover |
-| Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C) |
+| Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
 | Photo descriptions with Claude vision (`describe.py`) | ⏸ Code ready and tested with a fake Claude. Optional and off by default, because the API costs money; without it, Jev drives on the sensors (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
@@ -78,7 +78,8 @@ graph TD
 *   **Jev Auto**: twice a second, reads telemetry, reads the latest camera description, asks Jev for the next move and sends it to the rover.
 *   **Two safety layers**: laptop-side gate (confidence, stale data, blocked path) plus the rover's own reflexes and watchdog.
 *   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
-*   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions, even against the simulator.
+*   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions. Add `--live-jev` to use it with the simulator.
+*   **Jev spending guard**: `--sim` is free (pretend Jev) unless you add `--live-jev`. Each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and prints the calls and tokens used.
 *   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
 *   **One place for the hotspot**: type the hotspot name and password once in `.env`; `python -m earth_station.secrets` writes both boards' `secrets.h` from it and makes the rover token.
 *   **Check command**: `python -m earth_station --check` tests the settings files, the rover, the camera and Jev, and says in plain words how to fix each problem. Nothing moves.
@@ -196,12 +197,21 @@ If someone else flashes the rover, send them `rover1/secrets.h` (or just the tok
    JEV_API_KEY=<paste your key here>
    ```
    Save the file. `.env` never goes to GitHub, so the key stays private. Never paste it into code, issues or chat.
-3. Test it with the fake rover (internet needed, no rover):
+3. Test the key with **exactly one** Jev call (internet needed, no rover):
    ```sh
-   python -m earth_station --sim
+   python -m earth_station --check --sim --live-jev
    ```
-   The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
-4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
+   Look for `OK  Jev answering | <time> ms`.
+4. Let the real Jev drive the fake rover:
+   ```sh
+   python -m earth_station --sim --live-jev
+   ```
+   The pre-flight shows `Jev live | ... | at most 20 Jev calls`, and each decision line is now the real Jev's choice.
+5. **Spending guard.** Each Jev call uses credits, so:
+   - `--sim` on its own always uses the pretend Jev. Practice runs are free; only `--live-jev` spends.
+   - A run makes at most `JEV_MAX_CALLS` calls (default 20, including the pre-flight test; about 10 seconds of driving). Then it stops the rover, ends by itself and prints `Jev used 20 of 20 calls | ... tokens in, ... out`. Raise `JEV_MAX_CALLS` in `.env` when you want longer runs.
+   - The tests never call the real Jev.
+6. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
 
 ### D. Real photo descriptions with Claude (optional, paid)
 

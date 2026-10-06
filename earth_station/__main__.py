@@ -1,7 +1,8 @@
 """Run the Earth Station.
 
 python -m earth_station              # find the boards on the hotspot and drive
-python -m earth_station --sim        # start the built-in simulator and use it
+python -m earth_station --sim        # start the built-in simulator and use it (pretend Jev)
+python -m earth_station --sim --live-jev   # simulator + the real Jev (spends credits)
 python -m earth_station --suggest    # decide and log, but never send moves
 python -m earth_station --check      # test every piece and say how to fix it (add --sim to try)
 """
@@ -54,7 +55,7 @@ async def _amain(settings: config.Settings, *, find: bool) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> None:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="earth-station",
         description=__doc__,
@@ -63,9 +64,27 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--sim", action="store_true", help="run against the built-in fake rover")
     p.add_argument("--suggest", action="store_true", help="never send moves, only log them")
     p.add_argument("--check", action="store_true", help="test every piece, then exit")
-    a = p.parse_args(argv)
+    p.add_argument(
+        "--live-jev",
+        action="store_true",
+        help="use the real Jev even with --sim (spends credits, at most JEV_MAX_CALLS per run)",
+    )
+    return p
 
-    overrides: dict = {"suggest_only": a.suggest}
+
+def jev_override(a: argparse.Namespace) -> dict:
+    """--sim practice runs are free: they use the pretend Jev unless --live-jev is given."""
+    if a.live_jev:
+        return {"jev_mode": "live"}
+    if a.sim:
+        return {"jev_mode": "mock"}
+    return {}
+
+
+def main(argv: list[str] | None = None) -> None:
+    a = build_parser().parse_args(argv)
+
+    overrides: dict = {"suggest_only": a.suggest} | jev_override(a)
     if a.sim:
         world = sim.World(mode="jev")
         rover, camera = sim.start(world, token="sim-token", rover_port=0, camera_port=0)

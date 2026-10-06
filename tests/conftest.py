@@ -8,6 +8,8 @@ def settings(tmp_path, monkeypatch):
     """Default (simulator) settings, isolated from the developer's own .env."""
     for name in (
         "JEV_MODE",
+        "JEV_API_KEY",
+        "JEV_MAX_CALLS",
         "DESCRIBE_MODE",
         "VISION_API_KEY",
         "VISION_MODEL",
