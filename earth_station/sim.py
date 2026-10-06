@@ -38,6 +38,7 @@ class World:
         self.last_event = "Nominal"
         self.last_seq: int | None = None
         self.moves = 0
+        self.last_action: str | None = None
 
     def telemetry(self) -> dict[str, Any]:
         with self.lock:
@@ -100,6 +101,7 @@ class World:
                 self.distance_cm = self.rng.uniform(30, 220)
                 self.clear_side = self.rng.choice(("left", "right"))
             self.moves += action != "stop"
+            self.last_action = action
             return {"ok": True, "seq": seq, "executed": action}
 
     def set_mode(self, mode: str) -> None:

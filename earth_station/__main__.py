@@ -5,6 +5,9 @@ python -m earth_station --sim        # start the built-in simulator and use it (
 python -m earth_station --sim --live-jev   # simulator + the real Jev (spends credits)
 python -m earth_station --suggest    # decide and log, but never send moves
 python -m earth_station --check      # test every piece and say how to fix it (add --sim to try)
+
+Each run opens mission control in your browser (http://127.0.0.1:8000), with a STOP button.
+Add --no-browser to skip opening it; the address is printed either way.
 """
 
 from __future__ import annotations
@@ -12,11 +15,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import webbrowser
 
 import httpx
 
 from . import check, config, finder, sim
 from .logger import Logger, paint
+from .mission_control import MissionControl
 from .station import Station
 
 
@@ -31,7 +36,26 @@ async def _find(settings: config.Settings, client: httpx.AsyncClient) -> config.
     return settings if all(f.ok for f in found.values()) else None
 
 
-async def _amain(settings: config.Settings, *, find: bool) -> int:
+def _open_mission_control(station: Station, port: int, browser: bool) -> MissionControl | None:
+    """Start the mission control page. A busy port is reported, but the run goes on:
+    Ctrl+C in the terminal still stops the rover."""
+    mc = MissionControl(station, asyncio.get_running_loop(), port)
+    try:
+        url = mc.start()
+    except OSError as e:
+        print(
+            paint(f"mission control could not start on port {port}: {e}", "red")
+            + "\n      fix: close the other Earth Station, or set MISSION_CONTROL_PORT in .env"
+            + "\n      until then, press Ctrl+C here to stop the rover"
+        )
+        return None
+    print(f"{paint('mission control', 'blue')} {url}  (STOP button; Ctrl+C here works too)")
+    if browser:
+        webbrowser.open(url)
+    return mc
+
+
+async def _amain(settings: config.Settings, *, find: bool, browser: bool = True) -> int:
     async with httpx.AsyncClient() as client:
         if find:
             located = await _find(settings, client)
@@ -45,12 +69,15 @@ async def _amain(settings: config.Settings, *, find: bool) -> int:
             print("\nPre-flight failed. Fix the items marked X and run again.")
             log.close()
             return 1
+        mc = _open_mission_control(station, settings.mission_control_port, browser)
         try:
             await station.run()
         except asyncio.CancelledError:  # Ctrl+C
             pass
         finally:
             await station.land()
+            if mc:
+                mc.close()
             log.close()
     return 0
 
@@ -68,6 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--live-jev",
         action="store_true",
         help="use the real Jev even with --sim (spends credits, at most JEV_MAX_CALLS per run)",
+    )
+    p.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="don't open mission control in the browser (its address is still printed)",
     )
     return p
 
@@ -104,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(check.report(results, sim=a.sim))
 
     try:
-        code = asyncio.run(_amain(settings, find=not a.sim))
+        code = asyncio.run(_amain(settings, find=not a.sim, browser=not a.no_browser))
     except KeyboardInterrupt:
         code = 0
     sys.exit(code)

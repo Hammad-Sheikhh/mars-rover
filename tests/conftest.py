@@ -18,6 +18,7 @@ def settings(tmp_path, monkeypatch):
         "ROVER_URL",
         "CAMERA_URL",
         "ROVER_CMD_TOKEN",
+        "MISSION_CONTROL_PORT",
     ):
         monkeypatch.delenv(name, raising=False)
     return config.load(env_file=tmp_path / "missing.env", log_dir=tmp_path / "runs")

@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Control</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #181c22; --line: #2a3039; --text: #e6e9ee; --dim: #8b94a3;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --accent: #58a6ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f5f7; --panel: #ffffff; --line: #d8dce2; --text: #1b1f24; --dim: #5d6673;
+      --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --accent: #0969da;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  h1 { font-size: 20px; margin: 0; letter-spacing: .02em; }
+  .badge {
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .badge.ok { color: var(--ok); border-color: var(--ok); }
+  .badge.warn { color: var(--warn); border-color: var(--warn); }
+  .badge.bad { color: var(--bad); border-color: var(--bad); }
+  .spacer { flex: 1; }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  button {
+    font: inherit; font-weight: 800; letter-spacing: .08em; cursor: pointer;
+    border: 0; border-radius: 12px; color: #fff;
+  }
+  #stop { background: var(--bad); font-size: 26px; padding: 14px 40px; }
+  #stop:active { transform: scale(.97); }
+  #resume { background: var(--ok); font-size: 18px; padding: 12px 24px; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .hint { color: var(--dim); font-size: 12px; }
+  #banner {
+    display: none; padding: 10px 16px; font-weight: 600; text-align: center;
+    background: var(--warn); color: #000;
+  }
+  #banner.bad { background: var(--bad); color: #fff; }
+  main {
+    display: grid; gap: 14px; padding: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  section {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    min-width: 0;
+  }
+  h2 {
+    font-size: 12px; margin: 0 0 10px; color: var(--dim);
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  .photo {
+    aspect-ratio: 4 / 3; background: #000; border-radius: 8px; overflow: hidden;
+    display: grid; place-items: center; color: #8b94a3; text-align: center; padding: 0;
+  }
+  .photo img { width: 100%; height: 100%; object-fit: contain; display: none; }
+  .photo p { margin: 0; padding: 16px; font-size: 13px; }
+  .big { font-size: 30px; font-weight: 800; margin: 2px 0 6px; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; }
+  .row span:first-child { color: var(--dim); }
+  .row span:last-child { text-align: right; overflow-wrap: anywhere; }
+  .bar { display: grid; grid-template-columns: 90px 1fr 44px; gap: 8px; align-items: center;
+         font-size: 13px; padding: 2px 0; }
+  .bar .track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--accent); }
+  .bar.top .fill { background: var(--ok); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+         margin-right: 8px; background: var(--dim); vertical-align: middle; }
+  .dot.ok { background: var(--ok); } .dot.error { background: var(--bad); }
+  .dot.wait { background: var(--warn); } .dot.off { background: var(--line); }
+  .link { padding: 5px 0; }
+  .link small { display: block; color: var(--dim); margin-left: 18px; overflow-wrap: anywhere; }
+  .sensors { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .sensor { border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .sensor b { display: block; font-size: 20px; }
+  .sensor span { color: var(--dim); font-size: 12px; }
+  .ok-text { color: var(--ok); } .warn-text { color: var(--warn); } .bad-text { color: var(--bad); }
+  .muted { color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mission Control</h1>
+  <span id="mode" class="badge">…</span>
+  <span id="run" class="badge">connecting</span>
+  <span class="spacer"></span>
+  <div class="controls">
+    <span class="hint">Esc = STOP</span>
+    <button id="resume" hidden>RESUME</button>
+    <button id="stop">STOP</button>
+  </div>
+</header>
+<div id="banner"></div>
+
+<main>
+  <section>
+    <h2>Camera</h2>
+    <div class="photo">
+      <img id="photo" alt="Latest camera photo">
+      <p id="nophoto">No photo yet.</p>
+    </div>
+    <p id="summary" class="big" style="font-size:17px;font-weight:600">…</p>
+    <div class="row"><span>Obstacle ahead</span><span id="obstacle">–</span></div>
+    <div class="row"><span>Clear side</span><span id="clear">–</span></div>
+    <div class="row"><span>Hazards</span><span id="hazards">–</span></div>
+    <div class="row"><span>Description age</span><span id="sceneage">–</span></div>
+  </section>
+
+  <section>
+    <h2>Jev's last choice</h2>
+    <div id="action" class="big">–</div>
+    <div id="probs"></div>
+    <div class="row"><span>Jev calls</span><span id="calls">–</span></div>
+  </section>
+
+  <section>
+    <h2>Safety gate</h2>
+    <div id="gate" class="big" style="font-size:22px">–</div>
+    <div class="row"><span>Reason</span><span id="reason">–</span></div>
+    <div class="row"><span>Sent to rover</span><span id="sent">–</span></div>
+    <div class="row"><span>Rover said</span><span id="reply">–</span></div>
+  </section>
+
+  <section>
+    <h2>Links</h2>
+    <div id="links"></div>
+  </section>
+
+  <section>
+    <h2>Sensors</h2>
+    <div id="sensors" class="sensors"></div>
+    <div class="row"><span>Reading age</span><span id="telage">–</span></div>
+  </section>
+
+  <section>
+    <h2>This run</h2>
+    <div class="row"><span>Decisions</span><span id="decisions">–</span></div>
+    <div class="row"><span>Moves sent</span><span id="nsent">–</span></div>
+    <div class="row"><span>Stopped by gate</span><span id="ngate">–</span></div>
+    <div class="row"><span>Refused by rover</span><span id="nrefused">–</span></div>
+    <div class="row"><span>Log file</span><span id="log" class="muted">–</span></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const ACTIONS = ["forward", "turn_left", "turn_right", "reverse", "stop"];
+const SENSORS = [
+  ["distance_cm", "distance", "cm"], ["pitch", "pitch", "°"], ["roll", "roll", "°"],
+  ["temperature", "temperature", "°C"], ["humidity", "humidity", "%"],
+  ["pressure", "pressure", "hPa"], ["vibration", "vibration", "g"],
+  ["last_event", "last event", ""],
+];
+let shownPhoto = -1;
+let failures = 0;
+
+function set(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  if (cls !== undefined) el.className = cls;
+}
+const age = (ms) => (ms == null ? "–" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
+const words = (a) => (a ? a.replace("_", " ") : "–");
+
+async function post(path) {
+  try {
+    const r = await fetch(path, { method: "POST", headers: { "X-Mission-Control": "1" } });
+    if (!r.ok) throw new Error((await r.json()).error);
+  } catch (e) {
+    banner(`Could not reach the Earth Station: ${e.message}. Press Ctrl+C in its terminal.`, true);
+  }
+  refresh();
+}
+
+function banner(text, bad) {
+  const b = $("banner");
+  b.textContent = text;
+  b.className = bad ? "bad" : "";
+  b.style.display = text ? "block" : "none";
+}
+
+function render(s) {
+  const mode = s.mode || "unknown";
+  set("mode", `rover: ${mode}`, `badge ${mode === "jev" ? "ok" : "warn"}`);
+  let run = ["driving", "ok"];
+  if (s.paused) run = ["paused", "bad"];
+  else if (s.jev.budget_spent) run = ["Jev limit reached", "bad"];
+  else if (s.suggest_only) run = ["suggest only", "warn"];
+  else if (mode !== "jev") run = ["waiting for Jev Auto", "warn"];
+  set("run", run[0], `badge ${run[1]}`);
+
+  $("stop").disabled = false;
+  $("resume").hidden = !s.paused;
+  if (s.paused) banner("STOPPED. Jev is paused and the rover was told to stop. Press RESUME to continue.");
+  else if (mode !== "jev") banner("The rover isn't in Jev Auto. Press Jev Auto on its control page to let Jev drive.");
+  else banner("");
+
+  // camera
+  if (s.photo_id !== shownPhoto && s.photo_id > 0) {
+    shownPhoto = s.photo_id;
+    $("photo").src = `/photo?n=${s.photo_id}`;
+  }
+  const sc = s.scene || {};
+  set("summary", sc.summary || "No description yet.");
+  set("obstacle", sc.obstacle_ahead == null ? "–" : sc.obstacle_ahead ? "yes" : "no",
+      sc.obstacle_ahead ? "warn-text" : "");
+  set("clear", sc.clear_side || "–");
+  set("hazards", sc.hazards && sc.hazards.length ? sc.hazards.join(", ") : "none");
+  set("sceneage", age(s.scene_age_ms));
+
+  // Jev
+  const last = s.last;
+  set("action", last && last.action ? words(last.action) : last ? "no answer" : "–");
+  const probs = $("probs");
+  probs.replaceChildren();
+  if (last && last.probabilities) {
+    for (const a of ACTIONS) {
+      const p = last.probabilities[a] || 0;
+      const row = document.createElement("div");
+      row.className = a === last.action ? "bar top" : "bar";
+      const name = document.createElement("span");
+      name.textContent = words(a);
+      const track = document.createElement("div");
+      track.className = "track";
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      fill.style.width = `${Math.round(p * 100)}%`;
+      track.append(fill);
+      const pct = document.createElement("span");
+      pct.textContent = `${Math.round(p * 100)}%`;
+      row.append(name, track, pct);
+      probs.append(row);
+    }
+  }
+  set("calls", s.jev.mode === "live" ? `${s.jev.calls} of ${s.jev.max_calls}` : "pretend Jev (free)");
+
+  // gate
+  if (!last) set("gate", "–", "big");
+  else if (last.approved) set("gate", "approved", "big ok-text");
+  else set("gate", last.sent === "stop" || !last.sent ? "stopped" : "held", "big warn-text");
+  $("gate").style.fontSize = "22px";
+  set("reason", last ? last.reason : "–");
+  set("sent", last ? (last.sent ? words(last.sent) : s.suggest_only ? "nothing (suggest only)" : "nothing") : "–");
+  const reply = last && last.reply;
+  set("reply", !reply ? "–" : reply.ok ? "ok" : `refused: ${reply.refused || "unknown"}`,
+      reply && !reply.ok ? "bad-text" : "");
+
+  // links
+  const links = $("links");
+  links.replaceChildren();
+  for (const [name, l] of Object.entries(s.links)) {
+    const row = document.createElement("div");
+    row.className = "link";
+    const dot = document.createElement("span");
+    dot.className = `dot ${l.state}`;
+    const label = document.createElement("b");
+    label.textContent = name;
+    const state = document.createElement("span");
+    state.className = "muted";
+    state.textContent = ` ${{ ok: "OK", error: "problem", wait: "waiting", off: "off" }[l.state] || l.state}`;
+    const detail = document.createElement("small");
+    detail.textContent = l.detail;
+    row.append(dot, label, state, detail);
+    links.append(row);
+  }
+
+  // sensors
+  const box = $("sensors");
+  box.replaceChildren();
+  const t = s.telemetry || {};
+  for (const [key, label, unit] of SENSORS) {
+    if (!(key in t)) continue;
+    const cell = document.createElement("div");
+    cell.className = "sensor";
+    const v = document.createElement("b");
+    v.textContent = `${t[key]}${unit && typeof t[key] === "number" ? " " + unit : ""}`;
+    if (key === "last_event") v.style.fontSize = "14px";
+    const l = document.createElement("span");
+    l.textContent = label;
+    cell.append(v, l);
+    box.append(cell);
+  }
+  set("telage", age(s.telemetry_age_ms));
+
+  // run
+  set("decisions", s.stats.decisions);
+  set("nsent", s.stats.sent);
+  set("ngate", s.stats.stopped_by_gate);
+  set("nrefused", s.stats.refused);
+  set("log", s.log, "muted");
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/state", { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    failures = 0;
+    render(await r.json());
+  } catch (e) {
+    if (++failures < 3) return; // one slow answer is not a problem
+    set("run", "not running", "badge bad");
+    $("stop").disabled = true;
+    $("resume").hidden = true;
+    banner("The Earth Station isn't running. Start it again in the terminal; this page reconnects by itself.", true);
+  }
+}
+
+$("photo").addEventListener("load", () => {
+  $("photo").style.display = "block";
+  $("nophoto").style.display = "none";
+});
+$("photo").addEventListener("error", () => {
+  $("photo").style.display = "none";
+  $("nophoto").style.display = "block";
+  $("nophoto").textContent =
+    "This photo can't be shown here. The simulator sends a pretend photo with no picture in it.";
+});
+$("stop").addEventListener("click", () => post("/stop"));
+$("resume").addEventListener("click", () => post("/resume"));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") post("/stop");
+});
+
+refresh();
+setInterval(refresh, 500);
+</script>
+</body>
+</html>
