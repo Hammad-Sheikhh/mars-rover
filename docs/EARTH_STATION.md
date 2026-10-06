@@ -74,12 +74,21 @@ This works with the simulator, so you can do it before you have the rover.
    JEV_API_KEY=<paste your key here>
    ```
    Save the file. `.env` never goes to GitHub, so the key stays private. Never paste it into code, issues or chat.
-3. Test it with the fake rover (internet needed, no rover):
+3. Test the key with **exactly one** Jev call (internet needed, no rover):
    ```sh
-   python -m earth_station --sim
+   python -m earth_station --check --sim --live-jev
    ```
-   The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
-4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
+   Look for `OK  Jev answering | <time> ms`.
+4. Let the real Jev drive the fake rover:
+   ```sh
+   python -m earth_station --sim --live-jev
+   ```
+   The pre-flight shows `Jev live | ... | at most 20 Jev calls`, and each decision line is now the real Jev's choice.
+5. **Spending guard.** Each Jev call uses credits, so:
+   - `--sim` on its own always uses the pretend Jev. Practice runs are free; only `--live-jev` spends.
+   - A run makes at most `JEV_MAX_CALLS` calls (default 20, including the pre-flight test; about 10 seconds of driving). Then it stops the rover, ends by itself and prints `Jev used 20 of 20 calls | ... tokens in, ... out`. Raise `JEV_MAX_CALLS` in `.env` when you want longer runs.
+   - The tests never call the real Jev.
+6. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
 
 The request and reply follow TypeSafe's [API reference](https://docs.typesafe.ai/api). The tests in `tests/test_jev_client.py` check our code against its examples.
 
@@ -134,6 +143,7 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `VISION_EFFORT` | `low` | How hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
 | `VISION_TIMEOUT_S` | `10` | Give up on one photo after this many seconds (the scene goes stale and the gate stops the rover) |
 | `DECIDE_EVERY_MS` | `500` | How often Jev is asked |
+| `JEV_MAX_CALLS` | `20` | Most real Jev calls in one run (pre-flight included). Then the station stops the rover and ends the run. Only counts with `JEV_MODE=live` |
 | `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
 | `MAX_SPEED` / `MOVE_MS` | `170` / `300` | Speed cap (0–255) and length of each move |
 | `GOAL` | `explore the room safely` | Put into every message Jev reads |

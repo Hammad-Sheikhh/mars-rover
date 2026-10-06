@@ -8,6 +8,9 @@ Request and reply follow TypeSafe's API reference (https://docs.typesafe.ai/api)
 POST {state, model, questions} to /v1/systemone with a Bearer key. A choice
 question lists its options as a `criteria` map (option -> what it means); the
 reply gives `probabilities` per option. A noul reply is a 0-1 `noul` value.
+
+Credits are spent per live call, so each run may make at most JEV_MAX_CALLS of
+them. The client counts calls and the tokens each reply reports in `usage`.
 """
 
 from __future__ import annotations
@@ -25,6 +28,10 @@ from .whiteboard import Whiteboard
 
 class JevError(Exception):
     pass
+
+
+class JevBudgetError(JevError):
+    """This run has used all JEV_MAX_CALLS live calls."""
 
 
 @dataclass(frozen=True)
@@ -63,6 +70,9 @@ class JevClient:
     def __init__(self, client: httpx.AsyncClient, settings: Settings):
         self._client = client
         self._s = settings
+        self.calls = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
 
     async def ask(self, state: str, board: Whiteboard) -> Decision:
         start = time.perf_counter()
@@ -87,7 +97,19 @@ class JevClient:
         d = await self.ask("Pre-flight check. Rover is parked and not moving.", board)
         return d.latency_ms
 
+    def usage_line(self) -> str:
+        return (
+            f"Jev used {self.calls} of {self._s.jev_max_calls} calls | "
+            f"{self.input_tokens} tokens in, {self.output_tokens} out"
+        )
+
     async def _call_api(self, state: str) -> dict[str, Any]:
+        if self.calls >= self._s.jev_max_calls:
+            raise JevBudgetError(
+                f"Jev call limit reached ({self.calls} calls, JEV_MAX_CALLS in .env); "
+                "stopping so no more credits are spent"
+            )
+        self.calls += 1  # counted before sending: a call that times out may still be billed
         try:
             r = await self._client.post(
                 self._s.jev_api_url,
@@ -106,9 +128,14 @@ class JevClient:
         if r.status_code >= 400:
             raise JevError(f"Jev API returned HTTP {r.status_code}")
         try:
-            answers = r.json()["answers"]
+            body = r.json()
+            answers = body["answers"]
         except (ValueError, KeyError, TypeError) as e:
             raise JevError("Jev response has no 'answers' object") from e
+        usage = body.get("usage")
+        if isinstance(usage, dict):
+            self.input_tokens += int(usage.get("input_tokens") or 0)
+            self.output_tokens += int(usage.get("output_tokens") or 0)
         if not isinstance(answers, dict):
             raise JevError("Jev 'answers' is not an object")
         return answers

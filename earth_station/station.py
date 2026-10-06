@@ -15,7 +15,7 @@ import httpx
 from . import safety_gate, state_text
 from .config import Settings
 from .describe import DescribeError, describe
-from .jev_client import JevClient, JevError
+from .jev_client import JevBudgetError, JevClient, JevError
 from .links import CameraLink, LinkError, RoverLink
 from .logger import Logger, paint
 from .whiteboard import Whiteboard
@@ -30,6 +30,7 @@ class Station:
         self.jev = JevClient(client, settings)
         self.log = log
         self._last_error: dict[str, str] = {}
+        self.jev_budget_spent = False
 
     # ---------- pre-flight ----------
     async def preflight(self) -> bool:
@@ -39,6 +40,7 @@ class Station:
         log.check(
             True,
             f"Jev {s.jev_mode} | describe {s.describe_mode}"
+            + (f" | at most {s.jev_max_calls} Jev calls" if s.jev_mode == "live" else "")
             + (" | SUGGEST ONLY" if s.suggest_only else ""),
         )
         ok = True
@@ -109,7 +111,8 @@ class Station:
             await asyncio.sleep(self.s.camera_every_ms / 1000)
 
     async def decision_maker(self) -> None:
-        while True:
+        """Returns when the Jev call limit is reached, which ends the run."""
+        while not self.jev_budget_spent:
             if self.board.mode == "jev":
                 await self.decide_once()
             await asyncio.sleep(self.s.decide_every_ms / 1000)
@@ -120,6 +123,10 @@ class Station:
         try:
             decision = await self.jev.ask(state, board)
             self._clear_error("jev")
+        except JevBudgetError as e:
+            self._error("jev", str(e))
+            self.jev_budget_spent = True
+            decision = None  # the gate turns this into a stop
         except JevError as e:
             self._error("jev", str(e))
             decision = None
@@ -146,7 +153,16 @@ class Station:
             if self.board.mode != "jev"
             else paint("rover already in Jev Auto", "yellow")
         )
-        await asyncio.gather(self.sensor_reader(), self.camera_watcher(), self.decision_maker())
+        workers = [
+            asyncio.create_task(w())
+            for w in (self.sensor_reader, self.camera_watcher, self.decision_maker)
+        ]
+        try:
+            # Only the decision maker ever finishes: when the Jev call limit is reached.
+            await asyncio.wait(workers, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for w in workers:
+                w.cancel()
 
     async def land(self) -> None:
         """Send a final stop and print a summary. Called on Ctrl+C or any crash."""
@@ -165,6 +181,8 @@ class Station:
                 "dim",
             )
         )
+        if self.s.jev_mode == "live":
+            self.log.info(self.jev.usage_line(), "yellow")
 
     # ---------- error throttling: print each distinct error once ----------
     def _error(self, source: str, message: str) -> None:
