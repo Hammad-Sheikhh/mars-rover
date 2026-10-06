@@ -184,9 +184,9 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 |---|---|---|---|
 | 0 | **This spec** | No | Merged. |
 | 1 | **Easy setup**: `WIFI_SSID`/`WIFI_PASS` in `.env`, the `earth_station.secrets` helper with token generation, the `--check` command, README Quick Start rewritten. ✅ Done (PR #8). | No | A fresh clone on another laptop goes from zero to `--sim` by following the README alone. |
-| 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. ✅ Built (`finder.py`, `mdns.py`); the camera is found by name once milestone 4 gives it `cam.local` and `/id`. | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
+| 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. ✅ Done (PR #9). | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
 | 3 | **Rover firmware: Jev Auto** (R1–R6). 🧪 Written; waiting for the hardware test. | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
-| 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. | Teammate tests | Same as 3. |
+| 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. 🧪 Written (firmware 2.1); waiting for the hardware test. | Teammate tests | Same as 3. |
 | 5 | **Photo descriptions**: live `describe.py` using Claude vision. | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
 | 6 | **Mission control page.** | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
 | 7 | **Live Jev.** ✅ Code done; waiting for a key ($5 minimum credits). | No (needs credits) | `--sim` runs with `JEV_MODE=live`. |

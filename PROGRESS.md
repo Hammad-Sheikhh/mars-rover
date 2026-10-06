@@ -19,7 +19,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
-| Finding the boards automatically | 🧪 Milestone 2 built and tested on the simulator (PR #9). The camera is found by name after milestone 4 |
+| Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
+| Camera name `cam.local` and `/id` | 🧪 Milestone 4: written (camera firmware 2.1, PR #10). Waiting for the teammate's hardware test |
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
 | Mission control page in the browser | ⏳ Milestone 6 |
@@ -48,15 +49,29 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Merge PR #9 (milestone 2, board finder) once CI is green.
+1. Merge PR #10 (milestone 4, camera name) once CI is green.
 2. Add the teammate as a collaborator on GitHub (repo → Settings → Collaborators), and send them `rover1/secrets.h` (or just the rover token) **privately**.
-3. Teammate: flash firmware 2.1 (with the new `rover1/secrets.h`) and run the hardware checklist in PR #7. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)`.
+3. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
 4. **Real Jev:** buy $5 of credits at console.typesafe.ai, create a key, and put it in `.env` with `JEV_MODE=live`.
-5. Milestones 4, 5, 6: camera name (`cam.local`, `/id`), photo descriptions, mission control page.
+5. Milestones 5 and 6: photo descriptions (Claude vision), mission control page.
 
 ---
 
 ## Session log
+
+### 2026-10-06 — Session 5: the camera's name (milestone 4)
+
+**What we did**
+1. **Found PR #9 already merged** (all 6 CI checks green), brought the laptop's `main` up to date, and deleted the old local branch.
+2. **Camera firmware 2.1** (`cam1/cam1.ino`), copying how the rover does it:
+   - it announces the name `cam.local` once it has joined the hotspot;
+   - `GET /id` answers `{"board": "camera", "firmware": "2.1.0"}`, so the network scan recognises it;
+   - at boot the Serial monitor shows "Hotspot joined: yes/NO", the IP address, the name, the AP address and the firmware version. Never passwords.
+3. **Updated the finder's help message**, `.env.example`, the README, `SPEC.md`, `docs/EARTH_STATION.md`, `docs/ARCHITECTURE.md` and `CHANGELOG.md`. You now leave `CAMERA_URL` empty too.
+4. All 57 tests pass. `arduino-cli` isn't on this laptop, so CI does the compile check. **Not tested on the real camera yet.**
+
+**Things to remember**
+- The teammate must flash the new camera code before the finder can find the camera. Older camera code has no name and no `/id`, so `CAMERA_URL` is still needed for it.
 
 ### 2026-10-06 — Session 4: finding the boards (milestone 2)
 
