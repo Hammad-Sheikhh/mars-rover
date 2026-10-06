@@ -46,7 +46,7 @@ graph TD
 | Earth Station (`earth_station/`) | 🧪 Runs on the simulator |
 | Rover Jev Auto mode (firmware 2.1) | 🧪 Written and compiles; waiting for a test on the real rover |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C) |
-| Photo descriptions with Claude vision (`describe.py`) | 🧪 Code ready and tested with a fake Claude; needs an Anthropic key (Quick Start part D) and real sample photos ([SPEC.md](SPEC.md) milestone 5) |
+| Photo descriptions with Claude vision (`describe.py`) | ⏸ Code ready and tested with a fake Claude. Optional and off by default, because the API costs money; without it, Jev drives on the sensors (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
 | Camera name `cam.local` and `/id` (firmware 2.1) | 🧪 Written, compiles in CI; waiting for the hardware test ([SPEC.md](SPEC.md) milestone 4) |
@@ -203,9 +203,11 @@ If someone else flashes the rover, send them `rover1/secrets.h` (or just the tok
    The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
 4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
 
-### D. Real photo descriptions with Claude (no rover needed)
+### D. Real photo descriptions with Claude (optional, paid)
 
-Jev can't see pictures, so Claude looks at each camera photo and writes a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
+Jev can't see pictures, so Claude can look at each camera photo and write a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
+
+**You can skip this part.** It needs a paid Anthropic API key: roughly 1 cent per photo, or $15–25 per hour of driving on the default model. Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply.
 
 1. Get a key: sign in at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, then create a key under **API Keys**. Copy it.
 2. Open `.env` and set:
