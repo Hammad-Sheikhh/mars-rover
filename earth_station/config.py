@@ -51,6 +51,7 @@ class Settings:
     scene_max_age_ms: int
 
     goal: str
+    mission_control_port: int  # the page at http://127.0.0.1:<port>; 0 picks a free one
     suggest_only: bool
     log_dir: Path
 
@@ -104,6 +105,7 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         telemetry_max_age_ms=_int("TELEMETRY_MAX_AGE_MS", 500),
         scene_max_age_ms=_int("SCENE_MAX_AGE_MS", 3000),
         goal=_str("GOAL", "explore the room safely"),
+        mission_control_port=_int("MISSION_CONTROL_PORT", 8000),
         suggest_only=False,
         log_dir=REPO_ROOT / "runs",
     )
@@ -138,5 +140,7 @@ def validate(s: Settings) -> None:
         raise ConfigError("MIN_CONFIDENCE must be between 0 and 1")
     if not 0 < s.max_speed <= 255:
         raise ConfigError("MAX_SPEED must be between 1 and 255")
+    if not 0 <= s.mission_control_port <= 65535:
+        raise ConfigError("MISSION_CONTROL_PORT must be between 0 and 65535 (normally 8000)")
     if not 0 < s.move_ms <= 500:
         raise ConfigError("MOVE_MS must be between 1 and 500 (the rover caps moves at 500 ms)")

@@ -73,6 +73,8 @@ Runs on a laptop on the same router as both boards. Four async workers share a t
 | Decision maker | 500 ms | Numbers to words, asks Jev (`choice` over 5 actions), applies the safety gate, `POST rover /jev/cmd` |
 | Logger | always | Console plus `runs/*.jsonl` |
 
+**Mission control** (`mission_control.py`) is a small web server in its own thread, on `127.0.0.1:8000` only. The page polls `GET /state`, which the server answers by asking the station's asyncio loop for a snapshot, so the two threads never share data directly. `POST /stop` sends `stop` to the rover and sets `paused`. While paused, the decision maker idles, and an answer Jev was still working on is dropped before it reaches the rover. `POST /resume` clears it.
+
 The rover owns the drive mode. The Earth Station only drives while telemetry reports `mode: "jev"`, so any phone button press stops it. The full protocol and the rover-side rules (watchdog, vetoes, seq handling) are in [EARTH_STATION.md](EARTH_STATION.md#rover-protocol). `sim.py` implements the same protocol for tests.
 
 ## Data model (Supabase)
@@ -116,6 +118,7 @@ The threat model assumes a **public repository** and a rover operated over open 
 | Camera feed | Anyone who joins the camera AP can view it. Uploaded images are public URLs | Public bucket by design. Do not point the camera at private spaces |
 
 | Earth Station keys (Jev, vision) | Only on the laptop | Repo-root `.env` (git-ignored). Never on a board |
+| Mission control page (STOP/Resume) | Another website open in the laptop's browser could try to press Resume | Listens on `127.0.0.1` only, checks the `Host` name (against DNS rebinding), and STOP/Resume need an `X-Mission-Control` header that other sites can't send |
 | `/jev/cmd` drive endpoint | Anyone on the router could drive the rover | `X-Token` shared secret, rover-side vetoes and watchdog, Jev Auto only while enabled from the AP page |
 
 ### Known gaps (tracked for future work)

@@ -24,6 +24,9 @@ earth-station = "earth_station.__main__:main"
 [tool.setuptools]
 packages = ["earth_station"]
 
+[tool.setuptools.package-data]
+earth_station = ["*.html"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

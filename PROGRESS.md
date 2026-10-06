@@ -23,8 +23,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Camera name `cam.local` and `/id` | 🧪 Milestone 4 merged (camera firmware 2.1, PR #10). Waiting for the teammate's hardware test |
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions with Claude vision (`earth_station/describe.py`) | ⏸ Milestone 5 merged (PR #12) and tested with a fake Claude. Switched off for now: the API costs money, so we drive on sensors only |
-| Mission control page in the browser | ⏳ Milestone 6 |
-| Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard written (PR #15, waiting to be merged) |
+| Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17). Works on the simulator |
+| Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
 
 **Who has what:** the teammate has the physical rover and camera. The project leader (repo owner) works on the laptop side.
 
@@ -53,16 +53,34 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Leader: install the TypeSafe skill (TypeSafe's guidebook that helps Claude use Jev well). The collection is already added. In the Claude Code chat box, type `! claude plugin install typesafe@typesafe-ai` (spaces are spacebar presses; `!` must be the first character), press Enter, then `/exit` and start `claude` again.
-2. Merge PR #15 (Jev spending guard) and PR #16 (this diary and the explain-every-task rule). All checks on #15 passed.
-3. One short real Jev drive on the simulator: `python -m earth_station --sim --live-jev` with `JEV_MAX_CALLS=10`, to see if Jev's choices make sense. About 10 calls.
-4. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
-5. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for trying a free way to describe photos later.
-6. Milestone 6: the mission control page in the browser, with a big STOP button.
+1. Merge PR #17 (mission control) once its checks pass, and try it: `python -m earth_station --sim`, then press STOP and Resume in the browser.
+2. One short real Jev drive on the simulator: `python -m earth_station --sim --live-jev` with `JEV_MAX_CALLS=10`, to see if Jev's choices make sense. About 10 calls.
+3. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
+4. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for trying a free way to describe photos later.
+5. Milestone 8 (the first real drive) once the teammate's hardware tests pass. Until then, a free way for the camera to help (`SPEC.md` open questions) is the next laptop-only job.
 
 ---
 
 ## Session log
+
+### 2026-10-07 — Session 8: mission control (milestone 6)
+
+**What we did**
+1. **Found PRs #15 and #16 merged**, and the TypeSafe skill installed.
+2. **Built the mission control page** (`earth_station/mission_control.py` and `mission_control.html`). Every run opens `http://127.0.0.1:8000` in the browser. It shows:
+   - the photo and its description;
+   - the sensor readings and the rover's mode;
+   - Jev's last choice, with the chance it gave each move;
+   - what the safety gate did, and what the rover answered;
+   - whether the rover, camera, vision and Jev links are OK.
+3. **STOP button** (or the `Esc` key): stops the rover at once and pauses Jev. An answer Jev was still working on is thrown away. **Resume** lets Jev drive again.
+4. **Only this laptop can use it.** Phones on the hotspot can't open it, and other websites in the browser can't press its buttons.
+5. **6 new tests** (90 in total). We also tried it by hand on the simulator: STOP gave 0 moves in 2 seconds, Resume 4 moves in 2 seconds.
+6. New flag `--no-browser` and setting `MISSION_CONTROL_PORT` (default 8000). Opened **PR #17**.
+
+**Things to remember**
+- The simulator's photos are pretend, so the page shows "this photo can't be shown" plus the description. Real camera photos will show as pictures.
+- `Ctrl+C` in the terminal still works as a second STOP.
 
 ### 2026-10-06 — Session 7: the real Jev, carefully
 

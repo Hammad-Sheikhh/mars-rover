@@ -6,7 +6,7 @@ This is the plan for the whole project: what we're building, how it should behav
 * **What we did each session:** [PROGRESS.md](PROGRESS.md)
 * **This file:** where we're going.
 
-Last updated: 2026-10-05.
+Last updated: 2026-10-07.
 
 ---
 
@@ -103,7 +103,7 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 
 | # | Requirement |
 |---|---|
-| M1 | The Earth Station serves a page at `http://localhost:8000`. It opens in the browser when the program starts. Nothing extra to install. |
+| M1 | The Earth Station serves a page at `http://127.0.0.1:8000` (the laptop's own address; `MISSION_CONTROL_PORT` changes the number). It opens in the browser when the program starts. Nothing extra to install. |
 | M2 | It shows: the latest camera photo and its description, live sensor readings, the rover's mode, Jev's last choice with its confidence, what the safety gate did, and whether each link (rover, camera, Jev, vision) is OK. |
 | M3 | A big **STOP** button sends `stop` to the rover and pauses Jev until you press **Resume**. |
 | M4 | It works the same in `--sim` mode, so it can be built and demoed with no hardware. |
@@ -190,7 +190,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | 3 | **Rover firmware: Jev Auto** (R1–R6). 🧪 Written; waiting for the hardware test. | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
 | 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. 🧪 Written (firmware 2.1); waiting for the hardware test. | Teammate tests | Same as 3. |
 | 5 | **Photo descriptions**: live `describe.py` using Claude vision. ✅ Code done, tested with a fake Claude. ⏸ Using it is paused: the API costs money, so we drive on sensors only for now (D5). | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
-| 6 | **Mission control page.** | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
+| 6 | **Mission control page.** ✅ Done: works on the simulator, with tests for STOP/Resume. | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
 | 7 | **Live Jev.** ✅ Code done, with a spending guard (J4). Credits bought; first live test next. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
 | 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
 

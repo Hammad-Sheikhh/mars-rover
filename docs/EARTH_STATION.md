@@ -54,6 +54,25 @@ rover already in Jev Auto
 
 Press `Ctrl+C` to stop. It sends a final `stop` to the rover and prints a summary.
 
+## Mission control page
+
+Every run (not `--check`) opens `http://127.0.0.1:8000` in your browser. `--no-browser` skips opening it; the address is printed either way.
+
+* **What it shows:** the latest camera photo and its description, the sensor readings, the rover's mode, Jev's last choice with the chance it gave each move, what the safety gate did and what the rover answered, whether each link (rover, camera, vision, Jev) is OK, and the run's totals. It updates twice a second.
+* **STOP** (or the `Esc` key): sends `stop` to the rover at once and pauses Jev. An answer Jev was still working on is dropped, not sent. The rover's own watchdog stops it within 1.5 s anyway once moves stop arriving.
+* **Resume**: Jev may drive again (still only while the rover is in Jev Auto).
+* **Simulator photos** are pretend JPEGs with no picture in them, so the page says the photo can't be shown and shows the description only.
+* **Only this laptop** can use it: it listens on `127.0.0.1`, answers only to `127.0.0.1` / `localhost`, and STOP/Resume need an `X-Mission-Control: 1` header that pages from other websites can't send.
+* If port 8000 is taken (for example by a second Earth Station), the run goes on without the page and says so. Set `MISSION_CONTROL_PORT` in `.env` to use another port.
+
+| Address | What it does |
+|---|---|
+| `GET /` | The page |
+| `GET /state` | Everything the page shows, as JSON |
+| `GET /photo` | The latest camera JPEG |
+| `POST /stop` | Stop the rover and pause Jev (needs the header) |
+| `POST /resume` | Let Jev drive again (needs the header) |
+
 To act as "the phone" while it runs, start the simulator on its own:
 
 ```sh
@@ -147,6 +166,7 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
 | `MAX_SPEED` / `MOVE_MS` | `170` / `300` | Speed cap (0–255) and length of each move |
 | `GOAL` | `explore the room safely` | Put into every message Jev reads |
+| `MISSION_CONTROL_PORT` | `8000` | Port of the mission control page, `http://127.0.0.1:<port>` |
 
 Keys live only in `.env`, which is git-ignored. Never put them in code.
 
@@ -161,6 +181,8 @@ flowchart LR
   WB --> DM["Decision maker: words -> Jev -> safety gate"]
   DM -->|"POST /jev/cmd"| R2["Rover"]
   DM --> LG["Logger: screen + runs/*.jsonl"]
+  WB --> MC["Mission control page"]
+  MC -->|STOP / Resume| DM
 ```
 
 | File | Job |
@@ -174,6 +196,8 @@ flowchart LR
 | `earth_station/jev_client.py` | Jev API client, plus the mock policy |
 | `earth_station/safety_gate.py` | The six laptop-side safety rules |
 | `earth_station/logger.py` | Console output and the JSONL run log |
+| `earth_station/mission_control.py` | Serves the mission control page; STOP and Resume |
+| `earth_station/mission_control.html` | The page itself (no internet needed) |
 | `earth_station/sim.py` | Fake rover and camera |
 | `earth_station/drive.py` | Send one move by hand |
 
@@ -239,7 +263,7 @@ Rover rules:
 ## Tests
 
 ```sh
-pytest           # 75 tests: safety rules, wording, parsing, finder, photo descriptions, full loop on the simulator
+pytest           # 90 tests: safety rules, wording, parsing, finder, photo descriptions, Jev spending guard, mission control, full loop on the simulator
 ruff check .     # lint
 ```
 

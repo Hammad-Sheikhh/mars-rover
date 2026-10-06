@@ -28,7 +28,9 @@ graph TD
 
     subgraph Laptop
         ES[Earth Station] <-->|next move| JEV[Jev AI]
+        MC[Mission control page] <-->|state / STOP| ES
     end
+    Leader((You)) -->|browser| MC
     ESP -->|/sensors/data| ES
     CAM -->|/capture| ES
     ES -->|/jev/cmd| ESP
@@ -50,7 +52,7 @@ graph TD
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
 | Camera name `cam.local` and `/id` (firmware 2.1) | 🧪 Written, compiles in CI; waiting for the hardware test ([SPEC.md](SPEC.md) milestone 4) |
-| Mission control page | ⏳ Planned ([SPEC.md](SPEC.md) milestone 6) |
+| Mission control page with STOP button | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 6) |
 
 ---
 
@@ -80,6 +82,7 @@ graph TD
 *   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
 *   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions. Add `--live-jev` to use it with the simulator.
 *   **Jev spending guard**: `--sim` is free (pretend Jev) unless you add `--live-jev`. Each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and prints the calls and tokens used.
+*   **Mission control page**: each run opens `http://127.0.0.1:8000` in your browser. It shows the latest photo and its description, the sensor readings, the rover's mode, Jev's last choice with its confidence, what the safety gate did, and whether the rover, camera, vision and Jev links are OK. A big **STOP** button (or the `Esc` key) stops the rover and pauses Jev until you press **Resume**. Only this laptop can open it. `--no-browser` skips opening it.
 *   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
 *   **One place for the hotspot**: type the hotspot name and password once in `.env`; `python -m earth_station.secrets` writes both boards' `secrets.h` from it and makes the rover token.
 *   **Check command**: `python -m earth_station --check` tests the settings files, the rover, the camera and Jev, and says in plain words how to fix each problem. Nothing moves.
@@ -103,6 +106,8 @@ mars-rover/
 │   ├── secrets.py            # Writes both boards' secrets.h from .env, makes the rover token
 │   ├── finder.py             # Finds the rover and camera: .env, simulator, .local name, network scan
 │   ├── mdns.py               # Looks up rover.local / cam.local itself (mDNS)
+│   ├── mission_control.py    # The browser page's small web server: state, photo, STOP/Resume
+│   ├── mission_control.html  # The mission control page itself
 │   └── check.py              # `--check`: tests every piece, says how to fix it
 ├── tests/                    # Earth Station tests (pytest)
 ├── scripts/                  # One-command setup: setup.ps1 (Windows), setup.sh (Mac/Linux)
@@ -151,7 +156,7 @@ mars-rover/
    ```sh
    python -m earth_station --sim
    ```
-   You should see a pre-flight list of `OK` lines, then one line per decision, like `#7 turn_right 0.91 -> sent, rover ok`. Press `Ctrl+C` to stop.
+   You should see a pre-flight list of `OK` lines, then one line per decision, like `#7 turn_right 0.91 -> sent, rover ok`. The **mission control page** opens in your browser at `http://127.0.0.1:8000`: try its **STOP** and **Resume** buttons. Press `Ctrl+C` in the terminal to end the run.
 7. Try the check command on the fake rover: `python -m earth_station --check --sim`. It should end with **"All 5 checks OK"**.
 
 ### B. With the real rover and camera

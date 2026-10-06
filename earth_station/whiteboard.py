@@ -21,6 +21,8 @@ class Whiteboard:
     telemetry_at: float = 0.0
     scene: dict[str, Any] | None = None
     scene_at: float = 0.0
+    photo: bytes | None = None  # latest camera JPEG, for mission control
+    photo_count: int = 0
     last_command: dict[str, Any] | None = None
     seq: int = 0
     stats: dict[str, int] = field(
@@ -32,6 +34,9 @@ class Whiteboard:
 
     def post_scene(self, data: dict[str, Any]) -> None:
         self.scene, self.scene_at = data, now_ms()
+
+    def post_photo(self, jpeg: bytes) -> None:
+        self.photo, self.photo_count = jpeg, self.photo_count + 1
 
     def telemetry_age_ms(self) -> float | None:
         return None if self.telemetry is None else now_ms() - self.telemetry_at
