@@ -114,7 +114,7 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 | # | Requirement |
 |---|---|
 | D1 | A vision AI (Claude) turns each camera photo into the short description Jev reads: `summary`, `obstacle_ahead`, `clear_side`, `hazards`. That shape is already defined and checked in `describe.py`. |
-| D2 | Key in `.env` (`VISION_API_KEY`). The model name is a setting too, with a fast, low-cost default chosen when we build it. |
+| D2 | Key in `.env` (`VISION_API_KEY`, an Anthropic key). The model (`VISION_MODEL`, default `claude-opus-5-5`) and how hard it thinks (`VISION_EFFORT`, default `low`) are settings too. Claude answers in a fixed JSON shape (structured output), so the reply always has the four fields. |
 | D3 | It must answer within about 1.5 s. If it's slow or fails, the scene goes stale, and the safety gate already stops the rover then. |
 | D4 | Test it on saved photos with no rover: `python -m earth_station.describe photo.jpg`. Keep a few sample photos in `tests/photos/` for the tests. |
 
@@ -187,7 +187,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. ✅ Done (PR #9). | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
 | 3 | **Rover firmware: Jev Auto** (R1–R6). 🧪 Written; waiting for the hardware test. | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
 | 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. 🧪 Written (firmware 2.1); waiting for the hardware test. | Teammate tests | Same as 3. |
-| 5 | **Photo descriptions**: live `describe.py` using Claude vision. | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
+| 5 | **Photo descriptions**: live `describe.py` using Claude vision. 🧪 Code done, tested with a fake Claude; waiting for a key and real photos. | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
 | 6 | **Mission control page.** | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
 | 7 | **Live Jev.** ✅ Code done; waiting for a key ($5 minimum credits). | No (needs credits) | `--sim` runs with `JEV_MODE=live`. |
 | 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |

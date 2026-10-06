@@ -128,7 +128,11 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_KEY`) |
 | `JEV_API_KEY` | empty | Your key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys) |
 | `JEV_API_URL` / `JEV_MODEL` | `https://api.typesafe.ai/v1/systemone` / `jev-latest` | Usually leave as they are |
-| `DESCRIBE_MODE` | `mock` | `mock` or `live` (the teammate's vision model, needs `VISION_API_KEY`) |
+| `DESCRIBE_MODE` | `mock` | `mock` = the simulator's hidden scene, `live` = Claude vision (needs `VISION_API_KEY`) |
+| `VISION_API_KEY` | empty | An Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
+| `VISION_MODEL` | `claude-opus-5-5` | Which Claude model describes the photos |
+| `VISION_EFFORT` | `low` | How hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
+| `VISION_TIMEOUT_S` | `10` | Give up on one photo after this many seconds (the scene goes stale and the gate stops the rover) |
 | `DECIDE_EVERY_MS` | `500` | How often Jev is asked |
 | `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
 | `MAX_SPEED` / `MOVE_MS` | `170` / `300` | Speed cap (0–255) and length of each move |
@@ -155,7 +159,7 @@ flowchart LR
 | `earth_station/station.py` | The workers and the decision cycle |
 | `earth_station/whiteboard.py` | Shared notebook, with a timestamp on every value |
 | `earth_station/links.py` | HTTP to the rover and camera |
-| `earth_station/describe.py` | **Teammate:** photo → short description |
+| `earth_station/describe.py` | Photo → short description (Claude vision, or the mock) |
 | `earth_station/state_text.py` | Numbers → plain words for Jev |
 | `earth_station/jev_client.py` | Jev API client, plus the mock policy |
 | `earth_station/safety_gate.py` | The six laptop-side safety rules |
@@ -225,7 +229,7 @@ Rover rules:
 ## Tests
 
 ```sh
-pytest           # 33 tests: safety rules, wording, parsing, full loop on the simulator
+pytest           # 71 tests: safety rules, wording, parsing, finder, photo descriptions, full loop on the simulator
 ruff check .     # lint
 ```
 
@@ -235,4 +239,4 @@ CI runs both on every pull request.
 
 * **Rover firmware on hardware.** The code is written and compiles in CI, but it hasn't been tested on the real rover yet.
 * **Camera `cam.local` and `/id` on hardware** ([SPEC.md](../SPEC.md) milestone 4). Written (firmware 2.1) and compiled in CI; waiting for the teammate's test.
-* **`describe.py` live mode** (project leader, [SPEC.md](../SPEC.md) milestone 5). Implement `_describe_live`, then test it with `python -m earth_station.describe photo.jpg`.
+* **Photo descriptions on real photos** ([SPEC.md](../SPEC.md) milestone 5). The code is done and tested with a fake Claude. Still to do: try it with a real Anthropic key on photos from the rover camera, and measure speed and cost.

@@ -31,8 +31,11 @@ class Settings:
     jev_api_key: str
     jev_model: str
 
-    describe_mode: str  # "mock" or "live" (teammate's vision AI)
-    vision_api_key: str
+    describe_mode: str  # "mock" or "live" (Claude vision)
+    vision_api_key: str  # Anthropic API key
+    vision_model: str
+    vision_effort: str  # how hard Claude thinks: low is fastest and cheapest
+    vision_timeout_s: float
 
     telemetry_every_ms: int
     camera_every_ms: int
@@ -85,6 +88,9 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         jev_model=_str("JEV_MODEL", "jev-latest"),
         describe_mode=_str("DESCRIBE_MODE", "mock").lower(),
         vision_api_key=_str("VISION_API_KEY", ""),
+        vision_model=_str("VISION_MODEL", "claude-opus-5-5"),
+        vision_effort=_str("VISION_EFFORT", "low").lower(),
+        vision_timeout_s=_float("VISION_TIMEOUT_S", 10.0),
         telemetry_every_ms=_int("TELEMETRY_EVERY_MS", 200),
         camera_every_ms=_int("CAMERA_EVERY_MS", 1500),
         decide_every_ms=_int("DECIDE_EVERY_MS", 500),
@@ -114,7 +120,14 @@ def validate(s: Settings) -> None:
             "JEV_MODE=live needs JEV_API_KEY in .env (get one at https://console.typesafe.ai/keys)"
         )
     if s.describe_mode == "live" and not s.vision_api_key:
-        raise ConfigError("DESCRIBE_MODE=live needs VISION_API_KEY in .env")
+        raise ConfigError(
+            "DESCRIBE_MODE=live needs VISION_API_KEY in .env "
+            "(an Anthropic API key from https://console.anthropic.com)"
+        )
+    if s.vision_effort not in ("low", "medium", "high", "xhigh", "max"):
+        raise ConfigError("VISION_EFFORT must be low, medium, high, xhigh or max")
+    if s.vision_timeout_s <= 0:
+        raise ConfigError("VISION_TIMEOUT_S must be more than 0")
     if not s.rover_cmd_token:
         raise ConfigError("ROVER_CMD_TOKEN is empty; set the same value as in rover1/secrets.h")
     if not 0 < s.min_confidence <= 1:

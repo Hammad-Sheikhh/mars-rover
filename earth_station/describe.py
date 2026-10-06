@@ -1,7 +1,7 @@
-"""Photo -> short scene description.  OWNER: camera / vision teammate.
+"""Photo -> short scene description, using Claude's vision.
 
-Jev cannot see images, so a vision AI turns each camera frame into the small
-dict below. Keep `summary` to one or two sentences: Jev gets less accurate
+Jev cannot see images, so a vision AI (Claude) turns each camera frame into the
+small dict below. Keep `summary` to one or two sentences: Jev gets less accurate
 when its input is long.
 
     {
@@ -11,22 +11,62 @@ when its input is long.
       "hazards": ["cable on floor"]
     }
 
-To plug in a real vision model, implement `_describe_live` and set
-DESCRIBE_MODE=live and VISION_API_KEY in .env. Test it on saved photos first:
+DESCRIBE_MODE=mock reads the simulator's hidden scene (no internet, no key).
+DESCRIBE_MODE=live sends the photo to Claude: put an Anthropic API key in .env
+as VISION_API_KEY. Try it on saved photos first; it prints the time taken too:
 
-    python -m earth_station.describe path/to/photo.jpg
+    python -m earth_station.describe path/to/photo.jpg [more.jpg ...]
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import sys
+import time
 from typing import Any
+
+import anthropic
 
 from .config import Settings
 
 CLEAR_SIDES = ("left", "right", "both", "none")
+
+# Models that accept the server-side refusal fallback: if one model wrongly
+# declines a photo, another one answers, so a false alarm doesn't blind the rover.
+FALLBACK_MODELS = ("claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5")
+
+PROMPT = """You are the eyes of a small wheeled rover. This photo is from its \
+front camera, about 10 cm above the floor. A driver who cannot see the photo \
+decides the next move from your answer alone.
+
+Reply with:
+- summary: one or two short sentences (under 200 characters). Say what is \
+directly ahead and roughly how far, then which way looks open.
+- obstacle_ahead: true if something would block the rover within about 1 metre \
+straight ahead.
+- clear_side: where the rover could turn to find open floor: "left", "right", \
+"both" or "none".
+- hazards: short names of anything risky (stairs, drop, cable, liquid, pet, \
+person's feet). Empty list if none.
+
+If the photo is too dark or blurry to judge, say so in the summary, set \
+obstacle_ahead to true and clear_side to "none"."""
+
+SCENE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "obstacle_ahead": {"type": "boolean"},
+        "clear_side": {"type": "string", "enum": list(CLEAR_SIDES)},
+        "hazards": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["summary", "obstacle_ahead", "clear_side", "hazards"],
+    "additionalProperties": False,
+}
+
+_clients: dict[str, anthropic.AsyncAnthropic] = {}
 
 
 class DescribeError(Exception):
@@ -84,17 +124,86 @@ def _describe_mock(jpeg: bytes) -> dict[str, Any]:
     }
 
 
-async def _describe_live(jpeg: bytes, settings: Settings) -> dict[str, Any]:
-    raise NotImplementedError(
-        "Live vision is not implemented yet. Implement _describe_live in "
-        "earth_station/describe.py, or set DESCRIBE_MODE=mock."
-    )
+def _client(settings: Settings) -> anthropic.AsyncAnthropic:
+    # One client per key, reused for every photo (keeps the connection open).
+    if settings.vision_api_key not in _clients:
+        _clients[settings.vision_api_key] = anthropic.AsyncAnthropic(
+            api_key=settings.vision_api_key,
+            timeout=settings.vision_timeout_s,
+            max_retries=1,
+        )
+    return _clients[settings.vision_api_key]
 
 
-if __name__ == "__main__":  # python -m earth_station.describe photo.jpg
+async def _describe_live(jpeg: bytes, settings: Settings, client: Any = None) -> dict[str, Any]:
+    if not jpeg.startswith(b"\xff\xd8"):
+        raise DescribeError("the camera did not send a JPEG photo")
+    client = client or _client(settings)
+    extra: dict[str, Any] = {}
+    if settings.vision_model in FALLBACK_MODELS:
+        extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+    image = base64.standard_b64encode(jpeg).decode("ascii")
+    try:
+        response = await client.beta.messages.create(
+            model=settings.vision_model,
+            max_tokens=2000,
+            output_config={
+                "effort": settings.vision_effort,
+                "format": {"type": "json_schema", "schema": SCENE_SCHEMA},
+            },
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/jpeg", "data": image},
+                        },
+                        {"type": "text", "text": PROMPT},
+                    ],
+                }
+            ],
+            **extra,
+        )
+    except anthropic.AuthenticationError as e:
+        raise DescribeError("vision AI rejected VISION_API_KEY; check the key in .env") from e
+    except anthropic.RateLimitError as e:
+        raise DescribeError("vision AI rate limit reached; try a bigger CAMERA_EVERY_MS") from e
+    except anthropic.APIStatusError as e:
+        raise DescribeError(f"vision AI error {e.status_code}: {e.message}") from e
+    except anthropic.APIConnectionError as e:
+        raise DescribeError("cannot reach the vision AI; is the laptop online?") from e
+
+    if response.stop_reason == "refusal":
+        raise DescribeError("vision AI declined to describe this photo")
+    if response.stop_reason == "max_tokens":
+        raise DescribeError("vision AI answer was cut off")
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        raise DescribeError("vision AI did not answer in the agreed format") from e
+
+
+async def _try_photos(paths: list[str]) -> None:
     from .config import load
 
-    if len(sys.argv) != 2:
-        sys.exit("usage: python -m earth_station.describe path/to/photo.jpg")
-    with open(sys.argv[1], "rb") as f:
-        print(json.dumps(asyncio.run(describe(f.read(), load())), indent=2))
+    settings = load()
+    print(f"describe {settings.describe_mode}, model {settings.vision_model}")
+    for path in paths:
+        with open(path, "rb") as f:
+            jpeg = f.read()
+        start = time.perf_counter()
+        try:
+            scene = await describe(jpeg, settings)
+        except DescribeError as e:
+            print(f"\n{path}: FAILED: {e}")
+            continue
+        print(f"\n{path} ({time.perf_counter() - start:.1f} s)")
+        print(json.dumps(scene, indent=2))
+
+
+if __name__ == "__main__":  # python -m earth_station.describe photo.jpg [more.jpg ...]
+    if len(sys.argv) < 2:
+        sys.exit("usage: python -m earth_station.describe path/to/photo.jpg [more.jpg ...]")
+    asyncio.run(_try_photos(sys.argv[1:]))
