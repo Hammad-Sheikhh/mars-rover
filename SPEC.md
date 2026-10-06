@@ -117,6 +117,7 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 | D2 | Key in `.env` (`VISION_API_KEY`, an Anthropic key). The model (`VISION_MODEL`, default `claude-opus-5-5`) and how hard it thinks (`VISION_EFFORT`, default `low`) are settings too. Claude answers in a fixed JSON shape (structured output), so the reply always has the four fields. |
 | D3 | It must answer within about 1.5 s. If it's slow or fails, the scene goes stale, and the safety gate already stops the rover then. |
 | D4 | Test it on saved photos with no rover: `python -m earth_station.describe photo.jpg`. Keep a few sample photos in `tests/photos/` for the tests. |
+| D5 | **Live vision is optional and off by default** (decided 2026-10-06: the Claude API costs money we don't have now). Without it, Jev drives on the sensors only. A real photo in `mock` mode must then tell Jev honestly that there is no camera vision, and never claim the way is clear. |
 
 ### 4.6 Jev
 
@@ -187,7 +188,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. ✅ Done (PR #9). | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
 | 3 | **Rover firmware: Jev Auto** (R1–R6). 🧪 Written; waiting for the hardware test. | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
 | 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. 🧪 Written (firmware 2.1); waiting for the hardware test. | Teammate tests | Same as 3. |
-| 5 | **Photo descriptions**: live `describe.py` using Claude vision. 🧪 Code done, tested with a fake Claude; waiting for a key and real photos. | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
+| 5 | **Photo descriptions**: live `describe.py` using Claude vision. ✅ Code done, tested with a fake Claude. ⏸ Using it is paused: the API costs money, so we drive on sensors only for now (D5). | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
 | 6 | **Mission control page.** | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
 | 7 | **Live Jev.** ✅ Code done; waiting for a key ($5 minimum credits). | No (needs credits) | `--sim` runs with `JEV_MODE=live`. |
 | 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
@@ -207,7 +208,7 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 |---|---|
 | Does `.local` work on our phone's hotspot? Some phones block devices from seeing each other. | Milestone 8. The network scan is the backup. If the phone blocks devices completely, use a different phone or a small travel router. |
 | Exact Jev request format | Typesafe's docs, once we have an account (milestone 7). |
-| Which vision model, and what it costs per run | Decide in milestone 5. Measure speed and cost on sample photos. |
+| A free way for the camera to help (no paid API) | Later, after the first real drive. Options: a small vision AI running on the laptop (for example with Ollama), or simple image rules such as "is the bottom of the photo mostly floor?". Measure speed on the teammate's sample photos. |
 | Is one description every 1.5 s fast enough to avoid obstacles? | The rover's own 20 cm forward veto covers us meanwhile. Measure it in milestone 8. |
 
 ## 9. How we work

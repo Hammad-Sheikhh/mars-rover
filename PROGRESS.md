@@ -22,7 +22,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
 | Camera name `cam.local` and `/id` | 🧪 Milestone 4 merged (camera firmware 2.1, PR #10). Waiting for the teammate's hardware test |
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
-| Photo descriptions (`earth_station/describe.py`) | ⏳ Milestone 5, now the leader's job (Claude vision) |
+| Photo descriptions with Claude vision (`earth_station/describe.py`) | ⏸ Milestone 5 merged (PR #12) and tested with a fake Claude. Switched off for now: the API costs money, so we drive on sensors only |
 | Mission control page in the browser | ⏳ Milestone 6 |
 | Real Jev connection | ✅ Code ready and tested against TypeSafe's docs. Waiting for a key ($5 of credits) |
 
@@ -42,6 +42,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **The leader builds the photo descriptions** with Claude vision, instead of the teammate. *Why:* it needs no hardware, and the teammate can focus on testing on the rover.
 - **`.env` is the one place for board settings** (2026-10-05). `python -m earth_station.secrets` writes both `secrets.h` files from it. *Why:* the two boards can never end up on different networks, and nobody has to invent a token.
 - **Board addresses in `.env` are optional** (2026-10-06). Empty means "find it": `.env`, then a simulator on this laptop, then `rover.local` / `cam.local`, then a scan of the hotspot. *Why:* nobody has to look up an IP address, and the same `.env` works on any hotspot.
+- **Photo descriptions use `claude-opus-5-5` at effort `low`** (2026-10-06), with a fixed answer form (structured output). Both are settings in `.env` (`VISION_MODEL`, `VISION_EFFORT`). *Why:* low effort keeps each answer quick and cheap.
+- **No paid photo descriptions for now** (2026-10-06). The Claude API costs roughly $15–25 per hour of driving on the default model, which we can't afford now. `DESCRIBE_MODE` stays `mock`, and Jev drives on the distance and tilt sensors. *Why:* the rover's own safety rules already stop it before it hits things. A free option (a vision AI running on the laptop, or simple image rules) can come later. Jev's $5 is affordable and will come later.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **The leader's manual tasks aren't written here until they're confirmed done** (2026-10-06). Claude keeps the open ones in its private memory and asks about them every session (see `CLAUDE.md`). *Why:* the diary should only say what really happened.
 - **Claude explains every step and every GitHub action in beginner-friendly words** (see `CLAUDE.md`).
@@ -51,11 +53,29 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 The full build order is in `SPEC.md` section 6.
 
 1. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
-2. Milestones 5 and 6: photo descriptions (Claude vision), mission control page.
+2. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for testing the photo descriptions on real rover-eye views.
+3. Small fix: in `mock` mode, a real camera photo should tell Jev "no camera vision, rely on the distance sensor" instead of "nothing ahead, both sides clear" (SPEC D5).
+4. Milestone 6: the mission control page in the browser, with a big STOP button.
 
 ---
 
 ## Session log
+
+### 2026-10-06 — Session 6: photo descriptions (milestone 5)
+
+**What we did**
+1. **Claude now describes the camera photos** (`earth_station/describe.py`). With `DESCRIBE_MODE=live` and an Anthropic key in `VISION_API_KEY`, each photo goes to Claude. Claude fills in a fixed form: what's ahead, whether it's blocked, which side is clear, and any hazards. `mock` is still the default, so nothing changes without a key.
+2. **New settings:** `VISION_MODEL` (default `claude-opus-5-5`), `VISION_EFFORT` (default `low`) and `VISION_TIMEOUT_S` (default 10 seconds).
+3. **Problems never crash the station.** A wrong key, no internet, a refusal or a bad answer becomes a clear message. Then the safety gate stops the rover, because the scene gets too old.
+4. **`python -m earth_station.describe a.jpg b.jpg`** describes saved photos and prints how long each one took.
+5. **14 new tests** with a fake Claude (71 in total). Updated the README (new Quick Start part D; Supabase is now part E), `.env.example`, `SPEC.md`, `docs/EARTH_STATION.md` and `CHANGELOG.md`.
+6. All 6 CI checks passed. **Merged PR #12.**
+
+7. **Decided not to use the paid Claude API for now** (too expensive for us). The code stays in the project, switched off. We wrote this into `SPEC.md` (D5, and a new open question about free options).
+
+**Things to remember**
+- Not tried with the real Claude. If we ever turn it on: the key goes only in `.env`, and we measure speed (under about 1.5 s) and cost first.
+- Teammate photos are still useful: they let us try a free option later.
 
 ### 2026-10-06 — Session 5: the camera's name (milestone 4)
 
