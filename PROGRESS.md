@@ -24,7 +24,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
 | Photo descriptions with Claude vision (`earth_station/describe.py`) | ⏸ Milestone 5 merged (PR #12) and tested with a fake Claude. Switched off for now: the API costs money, so we drive on sensors only |
 | Mission control page in the browser | ⏳ Milestone 6 |
-| Real Jev connection | ✅ Code ready and tested against TypeSafe's docs. Waiting for a key ($5 of credits) |
+| Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard written (PR #15, waiting to be merged) |
 
 **Who has what:** the teammate has the physical rover and camera. The project leader (repo owner) works on the laptop side.
 
@@ -44,6 +44,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **Board addresses in `.env` are optional** (2026-10-06). Empty means "find it": `.env`, then a simulator on this laptop, then `rover.local` / `cam.local`, then a scan of the hotspot. *Why:* nobody has to look up an IP address, and the same `.env` works on any hotspot.
 - **Photo descriptions use `claude-opus-5-5` at effort `low`** (2026-10-06), with a fixed answer form (structured output). Both are settings in `.env` (`VISION_MODEL`, `VISION_EFFORT`). *Why:* low effort keeps each answer quick and cheap.
 - **No paid photo descriptions for now** (2026-10-06). The Claude API costs roughly $15–25 per hour of driving on the default model, which we can't afford now. `DESCRIBE_MODE` stays `mock`, and Jev drives on the distance and tilt sensors. *Why:* the rover's own safety rules already stop it before it hits things. A free option (a vision AI running on the laptop, or simple image rules) can come later. Jev's $5 is affordable and will come later.
+- **Jev spending guard** (2026-10-06): each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and ends. `--sim` uses the pretend Jev unless you add `--live-jev`. Tests never call the real Jev. *Why:* credits cost money, and the leader wants very careful use while we build.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **The leader's manual tasks aren't written here until they're confirmed done** (2026-10-06). Claude keeps the open ones in its private memory and asks about them every session (see `CLAUDE.md`). *Why:* the diary should only say what really happened.
 - **Claude explains every step and every GitHub action in beginner-friendly words** (see `CLAUDE.md`).
@@ -52,13 +53,33 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
-2. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for trying a free way to describe photos later.
-3. Milestone 6: the mission control page in the browser, with a big STOP button.
+1. Leader: install the TypeSafe skill (TypeSafe's guidebook that helps Claude use Jev well). The collection is already added. In the Claude Code chat box, type `! claude plugin install typesafe@typesafe-ai` (spaces are spacebar presses; `!` must be the first character), press Enter, then `/exit` and start `claude` again.
+2. Merge PR #15 (Jev spending guard) and PR #16 (this diary and the explain-every-task rule). All checks on #15 passed.
+3. One short real Jev drive on the simulator: `python -m earth_station --sim --live-jev` with `JEV_MAX_CALLS=10`, to see if Jev's choices make sense. About 10 calls.
+4. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
+5. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for trying a free way to describe photos later.
+6. Milestone 6: the mission control page in the browser, with a big STOP button.
 
 ---
 
 ## Session log
+
+### 2026-10-06 — Session 7: the real Jev, carefully
+
+**What we did**
+1. **The leader bought Jev credits** and saved the key in `.env`. We checked it was saved without ever showing it on screen.
+2. **Checked our Jev code against TypeSafe's live docs.** It matches: same address, question format and answer fields. Each answer also says how many tokens it used, which is what TypeSafe charges for.
+3. **Built a spending guard** (PR #15, all 6 CI checks passed, not merged yet):
+   - `JEV_MAX_CALLS` (default 20): the most real Jev calls in one run. Then the station stops the rover, ends by itself and prints the calls and tokens used.
+   - `--sim` is always free (pretend Jev). Only the new `--live-jev` flag spends credits.
+   - 9 new tests, all with a fake Jev (84 in total).
+4. **First real Jev call:** `python -m earth_station --check --sim --live-jev` gave "Jev answering, 571 ms". That was exactly 1 call.
+5. **Started installing TypeSafe's skill** for Claude Code: the collection (marketplace) is added, the plugin isn't installed yet. See "Next steps" step 1.
+6. **New rule in `CLAUDE.md`** (PR #16): Claude explains every task that is on the leader in full: what, why, where, numbered steps, what you should see, and the cost.
+
+**Things to remember**
+- `.env` still says `JEV_MODE=mock`, so normal runs are free. `--live-jev` is the switch for the real Jev.
+- In the Claude Code window, right-click **pastes**, and the ↑ key repeats the last command. Type commands fresh.
 
 ### 2026-10-06 — Session 6: photo descriptions (milestone 5)
 
