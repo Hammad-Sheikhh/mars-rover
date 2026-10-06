@@ -12,6 +12,15 @@ Guidance for Claude Code (and humans) working in this repository.
 * **At the end of a session, or after any meaningful change:** add a new entry at the top of the session log (date, session number, numbered plain-language list of what we did, things to remember). Also update "Where we are now", "Decisions so far" and "Next steps".
 * Never put passwords, keys or WiFi names in it. The repo is public.
 
+## Manual tasks for the project leader
+
+Some steps only the leader can do (on github.com, in a terminal, buying credits, sending a file privately).
+
+* **Don't write these into `PROGRESS.md`**, neither as "next steps" nor as done, until the leader has **confirmed** they did them. Ask first: "Have you done X yet?" Never assume.
+* Keep the list of manual tasks that are still open in Claude's memory, in the file `pending-manual-tasks.md` (outside the repo, so it's private).
+* **Keep reminding:** at the start of every session, and before suggesting `/clear`, list the open tasks and ask which ones are done. When the leader confirms one, remove it from that memory file. It may then be noted in the session log as done.
+* Tasks for the teammate (hardware tests) and milestones stay in `PROGRESS.md` as usual.
+
 ## How to work with this team (read first)
 
 The team is new to this domain and to GitHub. **Explain as you go.**
