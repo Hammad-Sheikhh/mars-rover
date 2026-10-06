@@ -53,9 +53,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 The full build order is in `SPEC.md` section 6.
 
 1. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
-2. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for testing the photo descriptions on real rover-eye views.
-3. Small fix: in `mock` mode, a real camera photo should tell Jev "no camera vision, rely on the distance sensor" instead of "nothing ahead, both sides clear" (SPEC D5).
-4. Milestone 6: the mission control page in the browser, with a big STOP button.
+2. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for trying a free way to describe photos later.
+3. Milestone 6: the mission control page in the browser, with a big STOP button.
 
 ---
 
@@ -72,6 +71,8 @@ The full build order is in `SPEC.md` section 6.
 6. All 6 CI checks passed. **Merged PR #12.**
 
 7. **Decided not to use the paid Claude API for now** (too expensive for us). The code stays in the project, switched off. We wrote this into `SPEC.md` (D5, and a new open question about free options).
+
+8. **Merged PR #13** (this diary and the decision). Then a **small safety fix** (PR #14): without paid vision, a real photo now tells Jev "No camera vision. Judge what is ahead from the distance sensor only", instead of hinting that both sides are clear. 4 new tests (75 in total) show the pretend Jev still drives forward when the sensor sees open space, turns at 30 cm and backs up at 10 cm.
 
 **Things to remember**
 - Not tried with the real Claude. If we ever turn it on: the key goes only in `.env`, and we measure speed (under about 1.5 s) and cost first.

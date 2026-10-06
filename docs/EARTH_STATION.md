@@ -128,7 +128,7 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_KEY`) |
 | `JEV_API_KEY` | empty | Your key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys) |
 | `JEV_API_URL` / `JEV_MODEL` | `https://api.typesafe.ai/v1/systemone` / `jev-latest` | Usually leave as they are |
-| `DESCRIBE_MODE` | `mock` | `mock` = the simulator's hidden scene, `live` = Claude vision (needs `VISION_API_KEY`) |
+| `DESCRIBE_MODE` | `mock` | `mock` = no paid vision: the simulator's hidden scene, or for a real photo "no camera vision, use the distance sensor". `live` = Claude vision (needs `VISION_API_KEY`, costs money) |
 | `VISION_API_KEY` | empty | An Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
 | `VISION_MODEL` | `claude-opus-5-5` | Which Claude model describes the photos |
 | `VISION_EFFORT` | `low` | How hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
@@ -229,7 +229,7 @@ Rover rules:
 ## Tests
 
 ```sh
-pytest           # 71 tests: safety rules, wording, parsing, finder, photo descriptions, full loop on the simulator
+pytest           # 75 tests: safety rules, wording, parsing, finder, photo descriptions, full loop on the simulator
 ruff check .     # lint
 ```
 

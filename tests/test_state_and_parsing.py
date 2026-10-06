@@ -2,7 +2,7 @@ import pytest
 
 from earth_station import state_text
 from earth_station.describe import DescribeError, _describe_mock, validate_scene
-from earth_station.jev_client import JevError, _parse_choice, _parse_noul
+from earth_station.jev_client import JevError, _mock_policy, _parse_choice, _parse_noul
 from earth_station.sim import fake_jpeg
 from earth_station.whiteboard import Whiteboard
 
@@ -75,3 +75,29 @@ def test_validate_scene_rejects_bad_shapes():
 def test_mock_describe_reads_simulator_scene():
     scene = {"summary": "Box ahead.", "obstacle_ahead": True, "clear_side": "left", "hazards": []}
     assert _describe_mock(fake_jpeg(scene)) == scene
+
+
+def test_real_photo_without_vision_is_honest(settings):
+    # SPEC D5: in mock mode a real camera photo must not claim the way is clear.
+    real_photo = b"\xff\xd8\xff\xe0 a real camera photo \xff\xd9"
+    scene = validate_scene(_describe_mock(real_photo))
+    assert "no camera vision" in scene["summary"].lower()
+    assert "distance sensor" in scene["summary"]
+    assert scene["clear_side"] == "none"
+
+    board = Whiteboard()
+    board.post_telemetry({"distance_cm": 80})
+    board.post_scene(scene)
+    text = state_text.build(board, settings)
+    assert "No camera vision" in text
+    assert "clear" not in text.split("Camera")[1].lower()
+
+
+@pytest.mark.parametrize(("cm", "best"), [(80, "forward"), (30, "turn_right"), (10, "reverse")])
+def test_without_vision_the_distance_sensor_decides(cm, best):
+    real_photo = b"\xff\xd8\xff\xe0 a real camera photo \xff\xd9"
+    board = Whiteboard()
+    board.post_telemetry({"distance_cm": cm})
+    board.post_scene(_describe_mock(real_photo))
+    probs, _ = _mock_policy(board, safe_cm=40)
+    assert max(probs, key=probs.get) == best
