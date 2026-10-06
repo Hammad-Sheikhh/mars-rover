@@ -46,7 +46,7 @@ graph TD
 | Earth Station (`earth_station/`) | 🧪 Runs on the simulator |
 | Rover Jev Auto mode (firmware 2.1) | 🧪 Written and compiles; waiting for a test on the real rover |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C) |
-| Photo descriptions (`describe.py`) | ⏳ Planned ([SPEC.md](SPEC.md) milestone 5) |
+| Photo descriptions with Claude vision (`describe.py`) | 🧪 Code ready and tested with a fake Claude; needs an Anthropic key (Quick Start part D) and real sample photos ([SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
 | Camera name `cam.local` and `/id` (firmware 2.1) | 🧪 Written, compiles in CI; waiting for the hardware test ([SPEC.md](SPEC.md) milestone 4) |
@@ -203,7 +203,27 @@ If someone else flashes the rover, send them `rover1/secrets.h` (or just the tok
    The pre-flight should show `OK  Jev live` and `OK  Jev answering | <time> ms`. Each decision line is now the real Jev's choice.
 4. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
 
-### D. Supabase (optional, will be removed later)
+### D. Real photo descriptions with Claude (no rover needed)
+
+Jev can't see pictures, so Claude looks at each camera photo and writes a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
+
+1. Get a key: sign in at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, then create a key under **API Keys**. Copy it.
+2. Open `.env` and set:
+   ```sh
+   DESCRIBE_MODE=live
+   VISION_API_KEY=<paste your key here>
+   ```
+   Save the file. Like the Jev key, it never goes to GitHub. Never paste it into code, issues or chat.
+3. Try it on any photo saved on the laptop (internet needed, no rover):
+   ```sh
+   python -m earth_station.describe path/to/photo.jpg
+   ```
+   It prints the description and how many seconds it took. You can give several photos at once.
+4. If it fails, the message says why: `rejected VISION_API_KEY` means the key is wrong, and `cannot reach` means no internet. To go back to the offline stand-in, set `DESCRIBE_MODE=mock`.
+
+The default model is `claude-opus-5-5` at `VISION_EFFORT=low` (it thinks briefly, which is quicker and cheaper). You can change either one in `.env`; see [docs/EARTH_STATION.md](docs/EARTH_STATION.md#settings-env).
+
+### E. Supabase (optional, will be removed later)
 The boards also upload readings and photos to Supabase. To use it, put `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` (the **anon** key only, never `service_role`), then run [`docs/supabase/schema.sql`](docs/supabase/schema.sql) in the Supabase SQL editor. It creates:
 *   **`sensor_readings`**: `temperature`, `humidity`, `ldr_state`, `pressure`, `altitude`, `pitch`, `roll`, `vibration`, `last_event`
 *   **`camera_captures`**: `image_url`

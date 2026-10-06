@@ -127,8 +127,14 @@ async def link_checks(s: Settings, client: httpx.AsyncClient) -> list[Result]:
         try:
             scene = await describe(photo, s)
             out.append(Result(True, f'photo description ({s.describe_mode}): "{scene["summary"]}"'))
-        except (DescribeError, NotImplementedError) as e:
-            out.append(Result(False, f"photo description failed: {e}", "set DESCRIBE_MODE=mock"))
+        except DescribeError as e:
+            out.append(
+                Result(
+                    False,
+                    f"photo description failed: {e}",
+                    "check VISION_API_KEY in .env, or set DESCRIBE_MODE=mock",
+                )
+            )
 
     if s.jev_mode == "mock":
         out.append(Result(True, "Jev: the pretend Jev (JEV_MODE=mock), no key needed"))

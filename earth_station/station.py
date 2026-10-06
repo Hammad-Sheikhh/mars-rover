@@ -66,7 +66,7 @@ class Station:
         except LinkError as e:
             ok = False
             log.check(False, f"{e}\n      check the camera is on and CAMERA_URL is right")
-        except (DescribeError, NotImplementedError) as e:
+        except DescribeError as e:
             ok = False
             log.check(False, f"describe failed: {e}")
 
@@ -104,7 +104,7 @@ class Station:
                 if scene["summary"] != last_summary:
                     self.log.scene(scene)
                     last_summary = scene["summary"]
-            except (LinkError, DescribeError, NotImplementedError) as e:
+            except (LinkError, DescribeError) as e:
                 self._error("camera", str(e))
             await asyncio.sleep(self.s.camera_every_ms / 1000)
 
