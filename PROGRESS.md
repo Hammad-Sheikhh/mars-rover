@@ -22,7 +22,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
 | Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
 | Rover code for "Jev Auto" mode | ✅ Hardware-tested 19–20 Oct: whole PR #7 checklist passed (driving, obstacle veto, watchdog, token) |
-| Photo descriptions with Gemini vision (`earth_station/describe.py`) | ✅ Built 20 Oct: Gemini (free tier) or Claude answer in the same agreed four-field shape, with a `VISION_FOCUS` object list; 108 tests pass with fakes. Awaits the leader's free Gemini key, then live photo tests |
+| Photo descriptions with Gemini vision (`earth_station/describe.py`) | ✅ Merged (PR #20) and **live-tested with the real Gemini key**: 2.4 s per description, same four-field shape for Jev. Camera-timing coherence fixed (PR #21). Bench built; run it on the flipped camera before milestone 8 |
+| Camera + vision bench (`earth_station/bench.py`) | ✅ Built 20 Oct: smoke / stamina / ground-truth probes / rate-limit burst, PASS/FAIL verdict, 120 tests. Awaits the standalone camera to run for real |
 | Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17), now upgraded (PR #19): the page explains every decision in plain words, four steps, plus a recent-decisions table |
 | Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
 
@@ -57,7 +58,7 @@ The full build order is in `SPEC.md` section 6.
 
 1. **Milestone 8 — the first real drive.** First a short live-Jev run on the simulator (`python -m earth_station --sim --live-jev`, `JEV_MAX_CALLS=10`) so we can watch the AI's choices safely, then the real rover on the floor in an open area with a person next to it.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
-3. ~~Later: a free way for the camera to help Jev~~ **Built 20 Oct: the Gemini free-tier path.** Now: the leader gets a free key at aistudio.google.com, sets `VISION_PROVIDER=gemini` + `VISION_API_KEY` in `.env` (with `DESCRIBE_MODE=live` and `CAMERA_EVERY_MS=5000`), then `python -m earth_station.describe photo.jpg` on real camera photos.
+3. ~~Later: a free way for the camera to help Jev~~ **Built and live-tested with the real Gemini key.** Now: flash the camera with the Arduino IDE steps (they're in the leader's task notes), then run `python -m earth_station.bench all` on it, and on a pass go to milestone 8 (first real drive with vision).
 
 ---
 
@@ -74,11 +75,21 @@ The full build order is in `SPEC.md` section 6.
 5. **Docs updated everywhere:** `.env.example` (Gemini defaults + a free-tier photo-rate note), README status table and Quick Start part D (Gemini free first, Claude as the paid alternative), `docs/EARTH_STATION.md` settings table, `CHANGELOG.md` (Unreleased).
 6. **New standing rule, written into `CLAUDE.md` and `CONTRIBUTING.md`: commit early and often, theme-wise.** Every finished theme becomes its own commit once checks pass; unrelated changes are never mixed.
 
+**Added later the same day (the leader handed over a real Gemini key, named `roverv3`):**
+
+7. **Live with a real key.** Wrote the key into `.env` without printing it, switched on `DESCRIBE_MODE=live`/`VISION_PROVIDER=gemini`, and described a synthetic 640×480 "room" photo: **2.4 s**, correct JSON (`pillar directly ahead, side open`).
+8. **The first real-model bug in the wild:** Gemini Flash-Lite rejects `thinkingBudget: 0` with a 400 ("invalid argument") - it can't switch thinking off. Found with a direct REST diagnostic; fixed by sending `thinkingBudget` only to models that accept it (`_gemini_disables_thinking`). 110 tests. Merged as part of PR #20 (all 6 CI checks green).
+9. **Timing research found a real config bug:** the photo loop is `capture -> describe (~2.5 s) -> sleep`, so the true photo period is `CAMERA_EVERY_MS + 2.5 s`; with the old `SCENE_MAX_AGE_MS=3000` the gate would stop Jev for "camera description too old" most of the time. Fixed both to coherent values: `CAMERA_EVERY_MS=3000` (period ~5.5 s ~= 11 req/min, inside the free Flash-Lite tier) and `SCENE_MAX_AGE_MS=6500`. Merged as **PR #21** (all 6 checks green).
+10. **Grounded the timing with research:** Google no longer publishes per-model free-tier numbers (per project, see your AI Studio page); Flash-Lite snapshots say ~15 RPM / 1,000-1,500 RPD; the arXiv ESP32-CAM benchmark says VGA streams at 14 fps / ~15 KB and stays the sweet spot (SVGA is 8 fps, UXGA 1.3 fps - no benefit for stills); streaming to the vision API is out (the bottleneck is the 2.4 s API trip and the rate limit, not fps), a local MJPEG stream stays a later live-view nicety.
+11. **Built the reliability bench** (`python -m earth_station.bench`): `smoke`, `stamina` (fresh-scene coverage + 429 handling), `scene` ground-truth probes (box ahead/left/right, covered lens, cable) scored against reality, and `burst` to find the exact 429 point and prove the calm cadence recovers. JSON events in `runs/vision-bench-*.jsonl`, final PASS/FAIL verdict. 15 new tests (120 total), and the sleeps that would block tests are named constants the tests shorten. Awaiting the flipped camera to run it for real.
+
 **Things to remember**
-- Gemini's free tier wants about one photo every 5 s: `CAMERA_EVERY_MS=5000` while `VISION_PROVIDER=gemini` with no billing.
+- Gemini's free tier is happiest at a photo period of ~5.5 s on this rover: `CAMERA_EVERY_MS=3000` **must** stay smaller than `SCENE_MAX_AGE_MS=6500` (the true period is CAM + ~2.5 s of describe time). If one changes, change the other.
 - Gemini's API returns an invalid key as **HTTP 400** with "API key not valid" in the body — the code reads that body before calling it a key problem.
+- Gemini Flash-Lite **cannot switch thinking off** (`thinkingBudget: 0` = 400). Only non-"lite" Flash models take the budget.
 - `gemini-flash-lite-latest` is a rolling alias, so it won't break when Google renames Flash models (the 2.5 series is being phased out right now).
-- The Gemini path was tested with fakes only. Live test with a real key on real camera photos is still to do.
+- Free-tier numbers now live only inside your AI Studio project page; any table without a date is archaeology. Rate limit is per project, not per key.
+- RPD is the real two-hour-a-day budget: ~660 descriptions per driving hour at ~11 req/min. Bench phases and sim runs on `DESCRIBE_MODE=mock` burn nothing.
 
 ---
 

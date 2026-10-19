@@ -48,7 +48,8 @@ graph TD
 | Earth Station (`earth_station/`) | ✅ Finds the real boards by name and drives them over the hotspot (drive commands + safety vetoes verified on hardware) |
 | Rover Jev Auto mode (firmware 2.1) | ✅ Hardware-tested (19/20 Oct 2026): all four drive moves, obstacle veto (<20 cm), watchdog, token check ([SPEC.md](SPEC.md) milestone 3) |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
-| Photo descriptions with Gemini vision (`describe.py`) | ⏸ Code ready and tested with a fake Gemini. Optional and off by default; a free Google AI Studio key makes it cost $0 (one photo every ~5 s). Claude still works as a paid alternative (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
+| Photo descriptions with Gemini vision (`describe.py`) | ✅ Merged + live-tested with a free Gemini key on a saved photo (2.4 s). Claude stays as a paid alternative (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
+| Camera + vision bench (`bench.py`) | ✅ Merged: `python -m earth_station.bench` scores the photo pipeline (smoke / stamina / ground-truth probes / rate-limit burst) before the camera goes on the rover |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
 | Camera name `cam.local` and `/id` (firmware 2.1) | ✅ Hardware-tested: found by name on the hotspot, `/id` answered, photo uploads flow ([SPEC.md](SPEC.md) milestone 4) |
@@ -242,6 +243,15 @@ Jev can't see pictures, so a vision AI can look at each camera photo and write a
 5. If it fails, the message says why: `rejected VISION_API_KEY` means the key is wrong, `rate limit` means the free tier wants slower photos, and `cannot reach` means no internet. To go back to the offline stand-in, set `DESCRIBE_MODE=mock`.
 
 **Prefer Claude?** Set `VISION_PROVIDER=anthropic` and `VISION_MODEL=claude-opus-5-5`, put an Anthropic key in `VISION_API_KEY` ([console.anthropic.com](https://console.anthropic.com), paid), and leave `CAMERA_EVERY_MS` as you like. The description shape and every message stay the same — only `.env` changes.
+
+**Before the camera goes on the rover**, score the whole photo pipeline (needs the camera on the same network):
+
+```sh
+python -m earth_station.bench             # smoke + stamina: sizes, latencies, fresh-scene coverage
+python -m earth_station.bench all         # adds ground-truth probes (props in front of the lens) and a rate-limit burst
+```
+
+It prints a PASS/FAIL verdict against the thresholds (capture p95, describe p95, describe success, how well it answered obstacle / clear-side / cable probes) and writes every step to `runs/vision-bench-*.jsonl`. With `DESCRIBE_MODE=mock` only the camera numbers are real, and the report says so.
 
 ### E. Supabase (optional, will be removed later)
 The boards also upload readings and photos to Supabase. To use it, put `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` (the **anon** key only, never `service_role`), then run [`docs/supabase/schema.sql`](docs/supabase/schema.sql) in the Supabase SQL editor. It creates:
