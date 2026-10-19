@@ -36,6 +36,7 @@
    docs: update pin map for new IR sensor
    ```
    Scopes: `rover`, `cam`, `station`, `db`, `docs`, `ci`.
+   **Commit early and often, theme-wise:** as soon as one theme is complete (code, tests and any docs for it) and checks pass, commit it. Split work into its themes up front rather than saving everything for one giant commit.
 3. Push and open a pull request into `main`. Fill in the template.
 4. CI must pass: both sketches compile, the secret scan is clean, and the Earth Station sets up, lints and tests cleanly on Windows, macOS and Linux.
 5. The other team member reviews. Squash-merge once it's approved.

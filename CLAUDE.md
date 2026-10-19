@@ -144,6 +144,7 @@ CI runs the setup script, lint and tests on Windows, macOS and Linux.
 
 ## Git workflow
 
+* **Commit early, commit often — theme-wise.** Every finished theme (a feature piece, a fix, a test batch, one doc update) is its own commit as soon as it passes lint and tests. Many small commits beat one big one: they are easier to review, to revert and to understand later. Never pile unrelated changes into one commit — split by theme first.
 * `main` is protected. Work on a branch, open a PR, and get one review from the other team member.
 * Branch names: `feat/...`, `fix/...`, `docs/...`, `chore/...`, `ci/...`.
 * Commits use Conventional Commits: `feat(rover): ...`, `fix(cam): ...`, `docs: ...`, `ci: ...`. Scopes are `rover`, `cam`, `station`, `db`, `docs`, `ci`.

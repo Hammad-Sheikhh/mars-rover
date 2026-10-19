@@ -1,6 +1,6 @@
-"""Photo -> short scene description, using Claude's vision.
+"""Photo -> short scene description, using a vision AI.
 
-Jev cannot see images, so a vision AI (Claude) turns each camera frame into the
+Jev cannot see images, so a vision AI turns each camera frame into the
 small dict below. Keep `summary` to one or two sentences: Jev gets less accurate
 when its input is long.
 
@@ -12,8 +12,13 @@ when its input is long.
     }
 
 DESCRIBE_MODE=mock reads the simulator's hidden scene (no internet, no key).
-DESCRIBE_MODE=live sends the photo to Claude: put an Anthropic API key in .env
-as VISION_API_KEY. Try it on saved photos first; it prints the time taken too:
+DESCRIBE_MODE=live sends the photo to the vision AI named in VISION_PROVIDER:
+"gemini" is the cheap default (a free key from https://aistudio.google.com) and
+"anthropic" is Claude. Either way the key goes into .env as VISION_API_KEY.
+VISION_FOCUS (comma-separated) names the objects the room test cares about:
+the AI is told to bias its answer towards them.
+
+Try it on saved photos first; it prints the time taken too:
 
     python -m earth_station.describe path/to/photo.jpg [more.jpg ...]
 """
@@ -28,6 +33,7 @@ import time
 from typing import Any
 
 import anthropic
+import httpx2
 
 from .config import Settings
 
@@ -66,6 +72,22 @@ SCENE_SCHEMA = {
     "additionalProperties": False,
 }
 
+# The same schema in Gemini's dialect (OpenAPI-style upper-case type names, no
+# "additionalProperties" key), so both providers enforce the agreed answer shape.
+GEMINI_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "summary": {"type": "STRING"},
+        "obstacle_ahead": {"type": "BOOLEAN"},
+        "clear_side": {"type": "STRING", "enum": list(CLEAR_SIDES)},
+        "hazards": {"type": "ARRAY", "items": {"type": "STRING"}},
+    },
+    "required": ["summary", "obstacle_ahead", "clear_side", "hazards"],
+}
+
+# Gemini's REST endpoint; the model name and :generateContent go after this.
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
 # What Jev reads for a real photo when nothing can look at it (DESCRIBE_MODE=mock).
 # It must never claim the way is clear (SPEC D5). obstacle_ahead stays false so
 # the distance sensor, not a guess, decides whether the rover may go forward.
@@ -78,10 +100,21 @@ NO_VISION = {
 }
 
 _clients: dict[str, anthropic.AsyncAnthropic] = {}
+_gemini_clients: dict[str, httpx2.AsyncClient] = {}
 
 
 class DescribeError(Exception):
     pass
+
+
+def _prompt(settings: Settings) -> str:
+    """The agreed prompt, plus one focus line when VISION_FOCUS is set."""
+    if not settings.vision_focus:
+        return PROMPT
+    return PROMPT + (
+        "\nPay special attention to these important objects: "
+        f"{settings.vision_focus}. Mention each one you can see in summary or hazards."
+    )
 
 
 async def describe(jpeg: bytes, settings: Settings) -> dict[str, Any]:
@@ -141,9 +174,102 @@ def _client(settings: Settings) -> anthropic.AsyncAnthropic:
     return _clients[settings.vision_api_key]
 
 
+def _gemini_client(settings: Settings) -> httpx2.AsyncClient:
+    # One client per key, reused for every photo (keeps the connection open).
+    if settings.vision_api_key not in _gemini_clients:
+        _gemini_clients[settings.vision_api_key] = httpx2.AsyncClient(
+            base_url=GEMINI_BASE_URL,
+            timeout=settings.vision_timeout_s,
+            headers={"x-goog-api-key": settings.vision_api_key},
+        )
+    return _gemini_clients[settings.vision_api_key]
+
+
+def _gemini_error(response: Any) -> str:
+    """Google's own error text, e.g. 'API key not valid', or a short fallback."""
+    try:
+        detail = str(response.json().get("error", {}).get("message", ""))
+    except ValueError:
+        detail = ""
+    return detail or response.text[:120]
+
+
+def _gemini_disables_thinking(model: str) -> bool:
+    """Flash-Lite can't switch thinking off (400), and thinks so little it
+    doesn't matter; the ordinary Flash models accept a thinking budget of 0."""
+    return "lite" not in model
+
+
+async def _describe_gemini(jpeg: bytes, settings: Settings, client: Any = None) -> dict[str, Any]:
+    client = client or _gemini_client(settings)
+    body = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": base64.standard_b64encode(jpeg).decode("ascii"),
+                        }
+                    },
+                    {"text": _prompt(settings)},
+                ],
+            }
+        ],
+        "generationConfig": {
+            # The answer must be JSON in the agreed shape.
+            "responseMimeType": "application/json",
+            "responseSchema": GEMINI_SCHEMA,
+            "maxOutputTokens": 2000,
+        },
+    }
+    if _gemini_disables_thinking(settings.vision_model):
+        # No thinking where it can be switched off: describe directly; Jev reasons.
+        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
+    try:
+        response = await client.post(f"/models/{settings.vision_model}:generateContent", json=body)
+        response.raise_for_status()
+    except httpx2.HTTPStatusError as e:
+        status, detail = e.response.status_code, _gemini_error(e.response)
+        if status in (401, 403) or (status == 400 and "api key" in detail.lower()):
+            raise DescribeError("vision AI rejected VISION_API_KEY; check the key in .env") from e
+        if status == 429:
+            raise DescribeError("vision AI rate limit reached; try a bigger CAMERA_EVERY_MS") from e
+        raise DescribeError(f"vision AI error {status}: {detail}") from e
+    except httpx2.TimeoutException as e:
+        raise DescribeError(
+            "vision AI took too long to answer; try a higher VISION_TIMEOUT_S"
+        ) from e
+    except httpx2.HTTPError as e:
+        raise DescribeError("cannot reach the vision AI; is the laptop online?") from e
+
+    data = response.json()
+    candidates = data.get("candidates") or []
+    # No candidates or a SAFETY/RECITATION finish: this photo got no description.
+    finish = candidates[0].get("finishReason", "STOP") if candidates else "SAFETY"
+    if finish == "MAX_TOKENS":
+        raise DescribeError("vision AI answer was cut off")
+    if finish != "STOP":
+        raise DescribeError("vision AI declined to describe this photo")
+    text = "".join(
+        part.get("text", "") for part in candidates[0].get("content", {}).get("parts", [])
+    )
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        raise DescribeError("vision AI did not answer in the agreed format") from e
+
+
 async def _describe_live(jpeg: bytes, settings: Settings, client: Any = None) -> dict[str, Any]:
     if not jpeg.startswith(b"\xff\xd8"):
         raise DescribeError("the camera did not send a JPEG photo")
+    if settings.vision_provider == "gemini":
+        return await _describe_gemini(jpeg, settings, client)
+    return await _describe_claude(jpeg, settings, client)
+
+
+async def _describe_claude(jpeg: bytes, settings: Settings, client: Any = None) -> dict[str, Any]:
     client = client or _client(settings)
     extra: dict[str, Any] = {}
     if settings.vision_model in FALLBACK_MODELS:
@@ -165,7 +291,7 @@ async def _describe_live(jpeg: bytes, settings: Settings, client: Any = None) ->
                             "type": "image",
                             "source": {"type": "base64", "media_type": "image/jpeg", "data": image},
                         },
-                        {"type": "text", "text": PROMPT},
+                        {"type": "text", "text": _prompt(settings)},
                     ],
                 }
             ],
