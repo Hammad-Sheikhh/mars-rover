@@ -45,13 +45,13 @@ graph TD
 | Supabase database + storage | ✅ Working |
 | AP mode — rover control page | ✅ Working |
 | AP mode — camera live view | ✅ Working |
-| Earth Station (`earth_station/`) | 🧪 Runs on the simulator |
-| Rover Jev Auto mode (firmware 2.1) | 🧪 Written and compiles; waiting for a test on the real rover |
+| Earth Station (`earth_station/`) | ✅ Finds the real boards by name and drives them over the hotspot (drive commands + safety vetoes verified on hardware) |
+| Rover Jev Auto mode (firmware 2.1) | ✅ Hardware-tested (19/20 Oct 2026): all four drive moves, obstacle veto (<20 cm), watchdog, token check ([SPEC.md](SPEC.md) milestone 3) |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
 | Photo descriptions with Claude vision (`describe.py`) | ⏸ Code ready and tested with a fake Claude. Optional and off by default, because the API costs money; without it, Jev drives on the sensors (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
-| Camera name `cam.local` and `/id` (firmware 2.1) | 🧪 Written, compiles in CI; waiting for the hardware test ([SPEC.md](SPEC.md) milestone 4) |
+| Camera name `cam.local` and `/id` (firmware 2.1) | ✅ Hardware-tested: found by name on the hotspot, `/id` answered, photo uploads flow ([SPEC.md](SPEC.md) milestone 4) |
 | Mission control page with STOP button | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 6) |
 
 ---
