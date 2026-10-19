@@ -22,7 +22,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
 | Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
 | Rover code for "Jev Auto" mode | ✅ Hardware-tested 19–20 Oct: whole PR #7 checklist passed (driving, obstacle veto, watchdog, token) |
-| Photo descriptions with Claude vision (`earth_station/describe.py`) | ⏸ Milestone 5 merged (PR #12) and tested with a fake Claude. Switched off for now: the API costs money, so we drive on sensors only |
+| Photo descriptions with Gemini vision (`earth_station/describe.py`) | ✅ Built 20 Oct: Gemini (free tier) or Claude answer in the same agreed four-field shape, with a `VISION_FOCUS` object list; 108 tests pass with fakes. Awaits the leader's free Gemini key, then live photo tests |
 | Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17), now upgraded (PR #19): the page explains every decision in plain words, four steps, plus a recent-decisions table |
 | Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
 
@@ -44,6 +44,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **Board addresses in `.env` are optional** (2026-10-06). Empty means "find it": `.env`, then a simulator on this laptop, then `rover.local` / `cam.local`, then a scan of the hotspot. *Why:* nobody has to look up an IP address, and the same `.env` works on any hotspot.
 - **Photo descriptions use `claude-opus-5-5` at effort `low`** (2026-10-06), with a fixed answer form (structured output). Both are settings in `.env` (`VISION_MODEL`, `VISION_EFFORT`). *Why:* low effort keeps each answer quick and cheap.
 - **No paid photo descriptions for now** (2026-10-06). The Claude API costs roughly $15–25 per hour of driving on the default model, which we can't afford now. `DESCRIBE_MODE` stays `mock`, and Jev drives on the distance and tilt sensors. *Why:* the rover's own safety rules already stop it before it hits things. A free option (a vision AI running on the laptop, or simple image rules) can come later. Jev's $5 is affordable and will come later.
+- **Photo descriptions run on Gemini's free tier** (2026-10-20). New `VISION_PROVIDER` setting: `gemini` (free key from Google AI Studio, one photo every ~5 s) or `anthropic` (the old paid Claude path, kept working). `VISION_FOCUS` names the objects that matter. *Why:* Jev only needs a short, honest description; the free tier makes it $0, and enabling billing later changes nothing in the code.
+- **Commit early and often, theme-wise** (2026-10-20), a standing rule now in `CLAUDE.md` and `CONTRIBUTING.md`. *Why:* many small, themed commits are easier to review, revert and understand than one big one.
 - **Jev spending guard** (2026-10-06): each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and ends. `--sim` uses the pretend Jev unless you add `--live-jev`. Tests never call the real Jev. *Why:* credits cost money, and the leader wants very careful use while we build.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **The leader's manual tasks aren't written here until they're confirmed done** (2026-10-06). Claude keeps the open ones in its private memory and asks about them every session (see `CLAUDE.md`). *Why:* the diary should only say what really happened.
@@ -55,11 +57,30 @@ The full build order is in `SPEC.md` section 6.
 
 1. **Milestone 8 — the first real drive.** First a short live-Jev run on the simulator (`python -m earth_station --sim --live-jev`, `JEV_MAX_CALLS=10`) so we can watch the AI's choices safely, then the real rover on the floor in an open area with a person next to it.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
-3. Later: a free way for the camera to help Jev (`SPEC.md` open questions) — laptop-only job.
+3. ~~Later: a free way for the camera to help Jev~~ **Built 20 Oct: the Gemini free-tier path.** Now: the leader gets a free key at aistudio.google.com, sets `VISION_PROVIDER=gemini` + `VISION_API_KEY` in `.env` (with `DESCRIBE_MODE=live` and `CAMERA_EVERY_MS=5000`), then `python -m earth_station.describe photo.jpg` on real camera photos.
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Session 12: the camera's eyes go free (Gemini vision)
+
+**What we did**
+
+1. **Chose the vision provider.** Compared Claude, Gemini, Groq and OpenRouter free tiers for the camera-photo job. Picked **Gemini Flash-Lite on the free tier**: a direct describer (no thinking — Jev does the reasoning), the best small-image quality of the free options, a no-credit-card key, and a cheap paid fallback (~$0.05–0.12 per driving hour) that needs no code change.
+2. **`describe.py` now speaks two providers.** New setting `VISION_PROVIDER` (`gemini` or `anthropic`); Claude's path is untouched. The Gemini path sends the photo straight to `generativelanguage.googleapis.com` with the existing `httpx2` library (no new packages), the same four-field answer schema in Gemini's own `responseSchema` dialect, and `thinkingBudget: 0` (no thinking, just describe). Errors translate into the same plain messages: wrong key, rate limit (try a bigger `CAMERA_EVERY_MS`), offline, cut-off answer, refusal, or a non-JSON answer.
+3. **New `VISION_FOCUS` setting.** A comma-separated list (e.g. `cables on the floor, stairs or drops, pet or person's feet`) is added to the photo prompt for **both** providers, so Jev reads descriptions biased towards the objects our rooms actually hold. The four-field answer shape and the safety gate are unchanged.
+4. **Tests grew with it.** A `FakeGemini` answers like the real API: good scene, request shape (photo + schema + focus line + no thinking), not-a-JPEG refused before a call, SAFETY/MAX_TOKENS/not-JSON answers, and every HTTP problem (bad key, 429, 500, connection, timeout) mapping to its message. Tests are now sealed from the developer's own `.env` (`VISION_PROVIDER`, `VISION_FOCUS` deleted per test). **108 tests all pass**, ruff clean.
+5. **Docs updated everywhere:** `.env.example` (Gemini defaults + a free-tier photo-rate note), README status table and Quick Start part D (Gemini free first, Claude as the paid alternative), `docs/EARTH_STATION.md` settings table, `CHANGELOG.md` (Unreleased).
+6. **New standing rule, written into `CLAUDE.md` and `CONTRIBUTING.md`: commit early and often, theme-wise.** Every finished theme becomes its own commit once checks pass; unrelated changes are never mixed.
+
+**Things to remember**
+- Gemini's free tier wants about one photo every 5 s: `CAMERA_EVERY_MS=5000` while `VISION_PROVIDER=gemini` with no billing.
+- Gemini's API returns an invalid key as **HTTP 400** with "API key not valid" in the body — the code reads that body before calling it a key problem.
+- `gemini-flash-lite-latest` is a rolling alias, so it won't break when Google renames Flash models (the 2.5 series is being phased out right now).
+- The Gemini path was tested with fakes only. Live test with a real key on real camera photos is still to do.
+
+---
 
 ### 2026-10-20 — Session 11: mission control explains itself (PR #19 merged)
 
