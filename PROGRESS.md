@@ -55,12 +55,19 @@ The full build order is in `SPEC.md` section 6.
 
 1. **Milestone 8 — the first real drive.** First a short live-Jev run on the simulator (`python -m earth_station --sim --live-jev`, `JEV_MAX_CALLS=10`) so we can watch the AI's choices safely, then the real rover on the floor in an open area with a person next to it.
 2. Resume the parked, half-finished mission-control work (branch `feat/mission-control-readable`: recent decision history on the page). The changes were stashed on 2026-10-20; restore them with `git stash pop` on that branch.
-3. Merge PR #2 (CI tool version bump from Dependabot). Small admin.
-4. Later: a free way for the camera to help Jev (`SPEC.md` open questions) — laptop-only job.
+3. Later: a free way for the camera to help Jev (`SPEC.md` open questions) — laptop-only job.
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Session 10: admin clean-up (PR #2 merged)
+
+1. **Merged PR #2** (Dependabot: `actions/checkout` v5 → v7 in the CI workflow). Before merging we checked the one breaking change in v6/v7 — it only affects `pull_request_target` workflows, and ours uses plain `push`/`pull_request`, so it was safe. All 6 CI checks on the PR were green. The GitHub MCP token could not merge (read-only), so `gh pr merge` from the laptop did it.
+2. **Housekeeping after the merge:** brought local `main` up to date, deleted the merged local branches (`docs/session-9-hardware-checks`, `docs/spec`) and the Dependabot branch on GitHub.
+3. The repo description on GitHub still starts with "RED FLAG:". Left as is for now; ask whether it's deliberate.
+
+---
 
 ### 2026-10-19/20 — Session 9: firmware 2.1 on real hardware (milestones 3 and 4 checked)
 
