@@ -9,7 +9,7 @@ import httpx
 from earth_station import sim
 from earth_station.logger import Logger
 from earth_station.mission_control import HEADER, MissionControl
-from earth_station.station import Station
+from earth_station.station import HISTORY, Station
 
 PAGE = {HEADER: "1"}
 
@@ -118,6 +118,11 @@ def test_state_has_what_the_page_shows(settings):
         assert s["links"]["vision"]["state"] == "off"  # no paid photo descriptions
         assert s["stats"]["decisions"] == 2
         assert s["photo_id"] >= 1
+        assert s["limits"]["min_confidence"] == st.s.min_confidence
+
+        # the page explains each decision: recent history and what Jev was told
+        assert len(s["history"]) == 2 and s["history"][-1] == s["last"]
+        assert "Distance ahead:" in s["last"]["told_jev"]
 
         photo = await client.get(f"{url}/photo")
         assert photo.headers["content-type"] == "image/jpeg"
@@ -151,5 +156,17 @@ def test_only_this_laptop_can_connect(settings):
     async def body(st, client, url, mc):
         assert mc._server.server_address[0] == "127.0.0.1"
         assert url.startswith("http://127.0.0.1:")
+
+    run_with_page(settings, world, body)
+
+
+def test_history_keeps_only_the_recent_decisions(settings):
+    world = sim.World(mode="jev", seed=1)
+
+    async def body(st, client, url, mc):
+        await tick(st, world, HISTORY + 5)
+        s = (await client.get(f"{url}/state")).json()
+        assert len(s["history"]) == HISTORY
+        assert s["stats"]["decisions"] == HISTORY + 5
 
     run_with_page(settings, world, body)

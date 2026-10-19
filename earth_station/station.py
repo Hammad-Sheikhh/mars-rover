@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 from typing import Any
 
 import httpx
@@ -23,6 +24,8 @@ from .jev_client import JevBudgetError, JevClient, JevError
 from .links import CameraLink, LinkError, RoverLink
 from .logger import Logger, paint
 from .whiteboard import Whiteboard
+
+HISTORY = 20  # recent decisions shown on mission control
 
 
 class Station:
@@ -37,6 +40,7 @@ class Station:
         self.jev_budget_spent = False
         self.paused = False  # STOP on mission control: no moves until Resume
         self.last: dict[str, Any] | None = None  # Jev's last choice and what the gate did
+        self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY)  # newest last
 
     # ---------- pre-flight ----------
     async def preflight(self) -> bool:
@@ -169,8 +173,10 @@ class Station:
             "reason": gate.reason,
             "sent": sent,
             "reply": reply,
+            "told_jev": state,
             "t": time.time(),
         }
+        self.history.append(self.last)
 
     # ---------- mission control ----------
     async def pause(self) -> None:
@@ -196,6 +202,11 @@ class Station:
             "scene_age_ms": _round(b.scene_age_ms()),
             "photo_id": b.photo_count,
             "last": self.last,
+            "history": list(self.history),
+            "limits": {
+                "min_confidence": self.s.min_confidence,
+                "safe_distance_cm": self.s.safe_distance_cm,
+            },
             "links": self._links(),
             "stats": dict(b.stats),
             "jev": {
