@@ -16,12 +16,12 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover (ESP32): driving, sensors, own WiFi control page | ✅ Works |
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
-| Earth Station (laptop program that lets Jev drive) | 🧪 Works with the fake rover; the real rover can't talk to it yet |
+| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. Full AI drive = Milestone 8 |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
-| Camera name `cam.local` and `/id` | 🧪 Milestone 4 merged (camera firmware 2.1, PR #10). Waiting for the teammate's hardware test |
-| Rover code for "Jev Auto" mode | 🧪 Milestone 3: written (firmware 2.1, PR #7). Waiting for the teammate's hardware test |
+| Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
+| Rover code for "Jev Auto" mode | ✅ Hardware-tested 19–20 Oct: whole PR #7 checklist passed (driving, obstacle veto, watchdog, token) |
 | Photo descriptions with Claude vision (`earth_station/describe.py`) | ⏸ Milestone 5 merged (PR #12) and tested with a fake Claude. Switched off for now: the API costs money, so we drive on sensors only |
 | Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17). Works on the simulator |
 | Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
@@ -53,15 +53,33 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. Merge PR #17 (mission control) once its checks pass, and try it: `python -m earth_station --sim`, then press STOP and Resume in the browser.
-2. One short real Jev drive on the simulator: `python -m earth_station --sim --live-jev` with `JEV_MAX_CALLS=10`, to see if Jev's choices make sense. About 10 calls.
-3. Teammate: flash rover firmware 2.1 (with the new `rover1/secrets.h`) and camera firmware 2.1, and run the hardware checklists in PR #7 and PR #10. Then `python -m earth_station --check` on the hotspot should say `rover found at ... (rover.local)` and `camera found at ... (cam.local)`.
-4. Teammate: save a few photos from the camera (`http://<camera address>/capture` in a browser, then save the image), for example open floor, a chair leg up close, a wall, and a dark corner. Send them to the leader. They're for trying a free way to describe photos later.
-5. Milestone 8 (the first real drive) once the teammate's hardware tests pass. Until then, a free way for the camera to help (`SPEC.md` open questions) is the next laptop-only job.
+1. **Milestone 8 — the first real drive.** First a short live-Jev run on the simulator (`python -m earth_station --sim --live-jev`, `JEV_MAX_CALLS=10`) so we can watch the AI's choices safely, then the real rover on the floor in an open area with a person next to it.
+2. Resume the parked, half-finished mission-control work (branch `feat/mission-control-readable`: recent decision history on the page). The changes were stashed on 2026-10-20; restore them with `git stash pop` on that branch.
+3. Merge PR #2 (CI tool version bump from Dependabot). Small admin.
+4. Later: a free way for the camera to help Jev (`SPEC.md` open questions) — laptop-only job.
 
 ---
 
 ## Session log
+
+### 2026-10-19/20 — Session 9: firmware 2.1 on real hardware (milestones 3 and 4 checked)
+
+The boards were with the leader. Both were flashed from `main` (firmware 2.1).
+
+**What we did**
+1. **All 12 `--check` checks passed on real hardware:** rover and camera found **by name** on the phone hotspot (`rover.local`, `cam.local`), token accepted, camera photo served (9.4 KB). This answers the diary's open question "does `.local` work on the hotspot?" — **yes**.
+2. **Whole rover checklist (PR #7) passed:** control page shows V2.1 and a live obstacle distance; Jev Auto toggles on (page badge, no wheel movement); all four drive commands from the laptop (forward, turn_left, turn_right, reverse) in one short self-stopping move each; holding a hand 10 cm in front of the sensor, `forward` was refused with `obstacle_too_close` (wheels still) and allowed again when the hand was removed; with Jev Auto off the move was refused `not_in_jev_mode`; with one character of the token twisted in `.env` the move was refused `bad_token` (HTTP 401), then `.env` was restored byte-identically (SHA-256 comparison, no secrets shown); one clean `forward` at the end.
+3. **Whole camera checklist (PR #10) passed:** found at `cam.local`, `/id` correct, photos upload to Supabase continuously (arriving in the table live), live view works on the camera's own AP. The camera joined the new hotspot without issues.
+4. **New hotspot:** `.env` and `rover1/secrets.h` were edited by hand and verified to match (hash comparison of values, nothing printed). Reminder learned: when the hotspot changes, both `secrets.h` files need it too — `python -m earth_station.secrets` keeps them in sync from `.env`.
+5. **Investigated "the readings table isn't updating":** not a bug. The rover's Serial showed `Data sent to Supabase successfully!`, and that line only prints on HTTP 201 — Supabase's "row created". No 400 ever appeared, and the payload matches the table's columns. The SQL editor showed the truth: **591 rows, newest one from the minute the board was powered down**. The confusion was the Supabase Table Editor showing only 100 rows per page, **oldest first** — new rows were on later pages. About 100 old rows were deleted while finding this out (harmless: data from the old firmware days, never shown).
+6. **Parked half-finished work:** branch `feat/mission-control-readable` carried uncommitted changes (the page would show the last 20 decisions and what Jev was told). Now stashed away safely on that branch to be resumed after Milestone 8.
+7. **New open PR:** #2 bumps the CI `actions/checkout` tool version (security/dependency bot). Not related to our work; merge whenever.
+
+**Things to remember**
+- **Supabase Table Editor shows 100 rows per page, oldest first.** To see the latest rows: sort `created_at` descending, or run `select * from sensor_readings order by created_at desc limit 20;` in the SQL editor. **Never delete rows to find new ones.**
+- **HTTP 201 from the rover's POST is proof of an inserted row**; the firmware prints "successfully!" only on 201.
+- The rover dropped off the hotspot once mid-session (name lookup and scan both missed it for ~a minute, then it was back at the same IP). Boards self-recover; if it happens often, fix it by setting `ROVER_URL=http://<ip>` in `.env`.
+- Serial monitor garbling (random lines of dots) at 115200 baud is cosmetic, not a fault.
 
 ### 2026-10-07 — Session 8: mission control (milestone 6)
 
