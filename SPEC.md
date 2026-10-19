@@ -187,10 +187,10 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 | 0 | **This spec** | No | Merged. |
 | 1 | **Easy setup**: `WIFI_SSID`/`WIFI_PASS` in `.env`, the `earth_station.secrets` helper with token generation, the `--check` command, README Quick Start rewritten. ✅ Done (PR #8). | No | A fresh clone on another laptop goes from zero to `--sim` by following the README alone. |
 | 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. ✅ Done (PR #9). | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
-| 3 | **Rover firmware: Jev Auto** (R1–R6). 🧪 Written; waiting for the hardware test. | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
-| 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. 🧪 Written (firmware 2.1); waiting for the hardware test. | Teammate tests | Same as 3. |
+| 3 | **Rover firmware: Jev Auto** (R1–R6). ✅ Done: hardware checklist passed on the real rover 19–20 Oct (PR #7). | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
+| 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. ✅ Done: hardware checklist passed on the real camera 19–20 Oct (PR #10). | Teammate tests | Same as 3. |
 | 5 | **Photo descriptions**: live `describe.py` using Claude vision. ✅ Code done, tested with a fake Claude. ⏸ Using it is paused: the API costs money, so we drive on sensors only for now (D5). | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
-| 6 | **Mission control page.** ✅ Done: works on the simulator, with tests for STOP/Resume. | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
+| 6 | **Mission control page.** ✅ Done: works on the simulator, with tests for STOP/Resume, plus a plain-word, step-by-step view of each decision and a recent-decisions table. | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
 | 7 | **Live Jev.** ✅ Code done, with a spending guard (J4). Credits bought; first live test next. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
 | 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
 
