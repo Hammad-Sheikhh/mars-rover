@@ -26,7 +26,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17), now upgraded (PR #19): the page explains every decision in plain words, four steps, plus a recent-decisions table |
 | Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
 
-**Who has what:** the teammate has the physical rover and camera. The project leader (repo owner) works on the laptop side.
+**Who has what (updated 2026-10-20):** the project leader now has **all the hardware**: rover, camera and laptop. The teammate was no longer sent the rover token since they don't flash anything for now. Hardware tests are done in person by the leader.
 
 ## Decisions so far
 
@@ -75,6 +75,10 @@ The full build order is in `SPEC.md` section 6.
 5. **All 6 CI checks green; merged PR #19** with `gh pr merge`. Also fixed a form typo in the PR body (had wrongly ticked "rover1 firmware"; laptop-only change).
 6. **Live smoke check:** ran `--sim --no-browser` for 25 seconds; `/state` answered 200 with 20 history entries, `told_jev` text and the limits — everything the new panels need.
 7. **Branch cleanup after the merge:** deleted the merged local branches (`feat/mission-control-readable`, plus stale `feat/jev-live` and `feat/rover-jev-auto`) and 9 fully-merged branches on GitHub (`docs/*` and `feat/*` ones left over from earlier PRs). Only `main` remains on both sides.
+
+6. **Added later the same day (leader):**
+   - **Repo description cleaned up:** GitHub showed the project starting with "RED FLAG:"; replaced so it now starts with "a two-board ESP32 Mars rover...". No code changed.
+   - **No more open manual tasks:** the leader confirmed the teammate doesn't need the rover token any more, because **the leader now has the rover and all the hardware**. The task (open since 2026-10-05) is closed without being done. The "Who has what" line above was updated: hardware tests are done in person by the leader from now on.
 
 **Things to remember**
 - Stashes live only in the machine and repo copy that made them — restoring quickly is kinder to future sessions than leaving them parked.
