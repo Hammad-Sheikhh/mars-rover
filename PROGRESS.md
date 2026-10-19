@@ -23,7 +23,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
 | Rover code for "Jev Auto" mode | ✅ Hardware-tested 19–20 Oct: whole PR #7 checklist passed (driving, obstacle veto, watchdog, token) |
 | Photo descriptions with Claude vision (`earth_station/describe.py`) | ⏸ Milestone 5 merged (PR #12) and tested with a fake Claude. Switched off for now: the API costs money, so we drive on sensors only |
-| Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17). Works on the simulator |
+| Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17), now upgraded (PR #19): the page explains every decision in plain words, four steps, plus a recent-decisions table |
 | Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
 
 **Who has what:** the teammate has the physical rover and camera. The project leader (repo owner) works on the laptop side.
@@ -54,12 +54,34 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 The full build order is in `SPEC.md` section 6.
 
 1. **Milestone 8 — the first real drive.** First a short live-Jev run on the simulator (`python -m earth_station --sim --live-jev`, `JEV_MAX_CALLS=10`) so we can watch the AI's choices safely, then the real rover on the floor in an open area with a person next to it.
-2. Resume the parked, half-finished mission-control work (branch `feat/mission-control-readable`: recent decision history on the page). The changes were stashed on 2026-10-20; restore them with `git stash pop` on that branch.
+2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. Later: a free way for the camera to help Jev (`SPEC.md` open questions) — laptop-only job.
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Session 11: mission control explains itself (PR #19 merged)
+
+1. **Resumed the parked work from session 9.** Switched to branch `feat/mission-control-readable` and restored the stashed changes with `git stash pop` (a stash is a safe drawer for uncommitted work). The code turned out to be finished: 91 tests passed and ruff (the style checker) was clean.
+2. **The mission-control page now explains every decision in plain words:**
+   - a one-sentence story line at the top ("The way ahead is clear (104 cm), so Jev chose forward and the rover is driving forward.");
+   - four left-to-right panels: what the rover sees (distance + a red/amber/green gauge against the 30 cm safe distance) → what Jev chose (with its confidence) → what the safety gate did (every gate reason translated into plain words) → what the rover did;
+   - a table of the last 20 decisions (newest first) with a colour-coded result chip;
+   - the exact words the station sends to Jev (it's everything Jev knows);
+   - confidence bars with a marker line showing `min_confidence`.
+3. **Everything is verified against the real strings:** the page's plain-word reasons match `safety_gate.py`, and the "Distance ahead:" regex matches `state_text.py`, so no explanation can drift out of sync silently. 2 new tests (91 total).
+4. **Docs updated in the same PR:** README features, `CHANGELOG.md` (Unreleased), `SPEC.md` milestone 6 row. A second `docs:` commit also fixed `SPEC.md` rows 3–4, which still said "waiting for the hardware test" although session 9 (19–20 Oct) passed both checklists.
+5. **All 6 CI checks green; merged PR #19** with `gh pr merge`. Also fixed a form typo in the PR body (had wrongly ticked "rover1 firmware"; laptop-only change).
+6. **Live smoke check:** ran `--sim --no-browser` for 25 seconds; `/state` answered 200 with 20 history entries, `told_jev` text and the limits — everything the new panels need.
+7. **Branch cleanup after the merge:** deleted the merged local branches (`feat/mission-control-readable`, plus stale `feat/jev-live` and `feat/rover-jev-auto`) and 9 fully-merged branches on GitHub (`docs/*` and `feat/*` ones left over from earlier PRs). Only `main` remains on both sides.
+
+**Things to remember**
+- Stashes live only in the machine and repo copy that made them — restoring quickly is kinder to future sessions than leaving them parked.
+- PowerShell turns git's stderr progress lines (like `remote:`) into scary-looking red "NativeCommandError" text. Harmless; the command succeeded.
+- Mission control's plain-word reasons depend on the exact gate reason strings; if `safety_gate.py` ever gets a new reason, add a translation in `mission_control.html` (`plainReason`) and a test.
+
+---
 
 ### 2026-10-20 — Session 10: admin clean-up (PR #2 merged)
 
