@@ -32,10 +32,12 @@ class Settings:
     jev_model: str
     jev_max_calls: int  # live calls allowed per run, so a forgotten window can't spend credits
 
-    describe_mode: str  # "mock" or "live" (Claude vision)
-    vision_api_key: str  # Anthropic API key
+    describe_mode: str  # "mock" or "live" (a vision AI describes the photos)
+    vision_provider: str  # "gemini" (Google AI Studio key) or "anthropic" (Claude key)
+    vision_api_key: str  # API key of the provider above
     vision_model: str
-    vision_effort: str  # how hard Claude thinks: low is fastest and cheapest
+    vision_effort: str  # anthropic only: how hard Claude thinks; low is fastest and cheapest
+    vision_focus: str  # comma-separated objects the vision AI should watch out for
     vision_timeout_s: float
 
     telemetry_every_ms: int
@@ -90,9 +92,11 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         jev_model=_str("JEV_MODEL", "jev-latest"),
         jev_max_calls=_int("JEV_MAX_CALLS", 20),
         describe_mode=_str("DESCRIBE_MODE", "mock").lower(),
+        vision_provider=_str("VISION_PROVIDER", "anthropic").lower(),
         vision_api_key=_str("VISION_API_KEY", ""),
         vision_model=_str("VISION_MODEL", "claude-opus-5-5"),
         vision_effort=_str("VISION_EFFORT", "low").lower(),
+        vision_focus=_str("VISION_FOCUS", ""),
         vision_timeout_s=_float("VISION_TIMEOUT_S", 10.0),
         telemetry_every_ms=_int("TELEMETRY_EVERY_MS", 200),
         camera_every_ms=_int("CAMERA_EVERY_MS", 1500),
@@ -119,6 +123,10 @@ def validate(s: Settings) -> None:
         raise ConfigError(f"JEV_MODE must be 'mock' or 'live', got {s.jev_mode!r}")
     if s.describe_mode not in ("mock", "live"):
         raise ConfigError(f"DESCRIBE_MODE must be 'mock' or 'live', got {s.describe_mode!r}")
+    if s.vision_provider not in ("gemini", "anthropic"):
+        raise ConfigError(
+            f"VISION_PROVIDER must be 'gemini' or 'anthropic', got {s.vision_provider!r}"
+        )
     if s.jev_mode == "live" and not s.jev_api_key:
         raise ConfigError(
             "JEV_MODE=live needs JEV_API_KEY in .env (get one at https://console.typesafe.ai/keys)"
@@ -126,6 +134,11 @@ def validate(s: Settings) -> None:
     if s.jev_max_calls < 1:
         raise ConfigError("JEV_MAX_CALLS must be 1 or more (live Jev calls allowed per run)")
     if s.describe_mode == "live" and not s.vision_api_key:
+        if s.vision_provider == "gemini":
+            raise ConfigError(
+                "DESCRIBE_MODE=live needs VISION_API_KEY in .env "
+                "(a free Google AI Studio key from https://aistudio.google.com)"
+            )
         raise ConfigError(
             "DESCRIBE_MODE=live needs VISION_API_KEY in .env "
             "(an Anthropic API key from https://console.anthropic.com)"
