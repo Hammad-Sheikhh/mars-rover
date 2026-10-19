@@ -18,7 +18,7 @@
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   header {
     display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
@@ -48,33 +48,65 @@
     background: var(--warn); color: #000;
   }
   #banner.bad { background: var(--bad); color: #fff; }
-  main {
-    display: grid; gap: 14px; padding: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  }
+  .wrap { padding: 16px; display: grid; gap: 14px; }
   section {
     background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
     min-width: 0;
   }
   h2 {
-    font-size: 12px; margin: 0 0 10px; color: var(--dim);
+    font-size: 12px; margin: 0 0 2px; color: var(--dim);
     text-transform: uppercase; letter-spacing: .08em;
   }
-  .photo {
-    aspect-ratio: 4 / 3; background: #000; border-radius: 8px; overflow: hidden;
-    display: grid; place-items: center; color: #8b94a3; text-align: center; padding: 0;
-  }
-  .photo img { width: 100%; height: 100%; object-fit: contain; display: none; }
-  .photo p { margin: 0; padding: 16px; font-size: 13px; }
-  .big { font-size: 30px; font-weight: 800; margin: 2px 0 6px; }
+  .explain { color: var(--dim); font-size: 13px; margin: 0 0 10px; }
+  #story { font-size: 20px; font-weight: 600; margin: 4px 0 0; }
+
+  /* the four steps of one decision */
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 860px) { .flow { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 480px) { .flow { grid-template-columns: 1fr; } }
+  .step { border: 1px solid var(--line); border-radius: 10px; padding: 12px; position: relative; }
+  .step .n { color: var(--dim); font-size: 12px; font-weight: 700; letter-spacing: .06em;
+             text-transform: uppercase; }
+  .step .what { font-size: 22px; font-weight: 800; margin: 4px 0; overflow-wrap: anywhere; }
+  .step .why { font-size: 13px; color: var(--dim); }
+  .step.ok { border-color: var(--ok); } .step.warn { border-color: var(--warn); }
+  .step.bad { border-color: var(--bad); }
+  .ok-text { color: var(--ok); } .warn-text { color: var(--warn); } .bad-text { color: var(--bad); }
+
+  /* distance gauge: red = danger, amber = close, green = clear */
+  .gauge { position: relative; height: 12px; border-radius: 6px; margin: 10px 0 4px;
+           background: linear-gradient(to right, var(--bad) 0 var(--d1),
+             var(--warn) var(--d1) var(--d2), var(--ok) var(--d2) 100%); opacity: .85; }
+  .gauge .mark { position: absolute; top: -5px; width: 4px; height: 22px; margin-left: -2px;
+                 background: var(--text); border-radius: 2px; transition: left .3s; }
+  .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); }
+
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
   .row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; }
   .row span:first-child { color: var(--dim); }
   .row span:last-child { text-align: right; overflow-wrap: anywhere; }
-  .bar { display: grid; grid-template-columns: 90px 1fr 44px; gap: 8px; align-items: center;
-         font-size: 13px; padding: 2px 0; }
-  .bar .track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar { display: grid; grid-template-columns: 100px 1fr 44px; gap: 8px; align-items: center;
+         font-size: 14px; padding: 3px 0; }
+  .bar .track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden;
+                position: relative; }
   .bar .fill { height: 100%; background: var(--accent); }
-  .bar.top .fill { background: var(--ok); }
+  .bar.top { font-weight: 700; } .bar.top .fill { background: var(--ok); }
+  .bar .need { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text);
+               opacity: .6; }
+  pre { margin: 0; white-space: pre-wrap; font: 13px/1.5 ui-monospace, Consolas, monospace;
+        background: var(--bg); border-radius: 8px; padding: 10px; }
+
+  /* history */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: .05em; padding: 4px 6px; }
+  td { padding: 5px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+  td.move { font-weight: 700; white-space: nowrap; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+          font-weight: 700; border: 1px solid; white-space: nowrap; }
+  .chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
+  .hist-wrap { overflow-x: auto; }
+
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
          margin-right: 8px; background: var(--dim); vertical-align: middle; }
   .dot.ok { background: var(--ok); } .dot.error { background: var(--bad); }
@@ -83,9 +115,11 @@
   .link small { display: block; color: var(--dim); margin-left: 18px; overflow-wrap: anywhere; }
   .sensors { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .sensor { border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
-  .sensor b { display: block; font-size: 20px; }
+  .sensor b { display: block; font-size: 18px; }
   .sensor span { color: var(--dim); font-size: 12px; }
-  .ok-text { color: var(--ok); } .warn-text { color: var(--warn); } .bad-text { color: var(--bad); }
+  .photo { aspect-ratio: 4 / 3; background: #000; border-radius: 8px; overflow: hidden;
+           display: none; }
+  .photo img { width: 100%; height: 100%; object-fit: contain; }
   .muted { color: var(--dim); font-size: 13px; }
 </style>
 </head>
@@ -103,68 +137,119 @@
 </header>
 <div id="banner"></div>
 
-<main>
+<div class="wrap">
   <section>
-    <h2>Camera</h2>
-    <div class="photo">
-      <img id="photo" alt="Latest camera photo">
-      <p id="nophoto">No photo yet.</p>
+    <h2>Right now</h2>
+    <p id="story">Connecting to the Earth Station…</p>
+  </section>
+
+  <section>
+    <h2>The last decision, step by step</h2>
+    <p class="explain">About once a second the laptop does these four steps. Read them left to right.</p>
+    <div class="flow">
+      <div class="step" id="s1">
+        <div class="n">1 · The rover sees</div>
+        <div class="what" id="s1what">–</div>
+        <div class="why" id="s1why">–</div>
+        <div class="gauge" id="gauge"><div class="mark" id="mark"></div></div>
+        <div class="scale"><span>0</span><span id="gmid">–</span><span id="gmax">200+ cm</span></div>
+      </div>
+      <div class="step" id="s2">
+        <div class="n">2 · Jev chooses</div>
+        <div class="what" id="s2what">–</div>
+        <div class="why" id="s2why">–</div>
+      </div>
+      <div class="step" id="s3">
+        <div class="n">3 · Safety gate checks</div>
+        <div class="what" id="s3what">–</div>
+        <div class="why" id="s3why">–</div>
+      </div>
+      <div class="step" id="s4">
+        <div class="n">4 · The rover does</div>
+        <div class="what" id="s4what">–</div>
+        <div class="why" id="s4why">–</div>
+      </div>
     </div>
-    <p id="summary" class="big" style="font-size:17px;font-weight:600">…</p>
-    <div class="row"><span>Obstacle ahead</span><span id="obstacle">–</span></div>
-    <div class="row"><span>Clear side</span><span id="clear">–</span></div>
-    <div class="row"><span>Hazards</span><span id="hazards">–</span></div>
-    <div class="row"><span>Description age</span><span id="sceneage">–</span></div>
   </section>
 
   <section>
-    <h2>Jev's last choice</h2>
-    <div id="action" class="big">–</div>
-    <div id="probs"></div>
-    <div class="row"><span>Jev calls</span><span id="calls">–</span></div>
+    <h2>Recent decisions</h2>
+    <p class="explain">Newest at the top. Green: the move was sent. Amber: the safety gate
+      stopped the rover instead. Red: something went wrong.</p>
+    <div class="hist-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Distance</th><th>Jev chose</th><th>Sure</th>
+          <th>Result</th><th>Why</th></tr></thead>
+        <tbody id="history"><tr><td colspan="6" class="muted">No decisions yet.</td></tr></tbody>
+      </table>
+    </div>
   </section>
 
-  <section>
-    <h2>Safety gate</h2>
-    <div id="gate" class="big" style="font-size:22px">–</div>
-    <div class="row"><span>Reason</span><span id="reason">–</span></div>
-    <div class="row"><span>Sent to rover</span><span id="sent">–</span></div>
-    <div class="row"><span>Rover said</span><span id="reply">–</span></div>
-  </section>
+  <div class="grid">
+    <section>
+      <h2>How sure Jev was</h2>
+      <p class="explain">Jev scores every move. The longest bar is its choice. The thin line
+        is how sure it must be before the safety gate lets the move through.</p>
+      <div id="probs"><span class="muted">No answer yet.</span></div>
+    </section>
 
-  <section>
-    <h2>Links</h2>
-    <div id="links"></div>
-  </section>
+    <section>
+      <h2>What we told Jev</h2>
+      <p class="explain">Jev can't see photos or numbers well, so the laptop turns the sensor
+        readings into these words. This is all Jev knows.</p>
+      <pre id="told">–</pre>
+    </section>
 
-  <section>
-    <h2>Sensors</h2>
-    <div id="sensors" class="sensors"></div>
-    <div class="row"><span>Reading age</span><span id="telage">–</span></div>
-  </section>
+    <section>
+      <h2>Sensors</h2>
+      <p class="explain">The rover's latest readings.</p>
+      <div id="sensors" class="sensors"></div>
+      <div class="row"><span>Reading age</span><span id="telage">–</span></div>
+    </section>
 
-  <section>
-    <h2>This run</h2>
-    <div class="row"><span>Decisions</span><span id="decisions">–</span></div>
-    <div class="row"><span>Moves sent</span><span id="nsent">–</span></div>
-    <div class="row"><span>Stopped by gate</span><span id="ngate">–</span></div>
-    <div class="row"><span>Refused by rover</span><span id="nrefused">–</span></div>
-    <div class="row"><span>Log file</span><span id="log" class="muted">–</span></div>
-  </section>
-</main>
+    <section>
+      <h2>Camera</h2>
+      <p class="explain" id="camnote">The description of the latest photo.</p>
+      <div class="photo" id="photobox"><img id="photo" alt="Latest camera photo"></div>
+      <p id="summary" style="font-weight:600;margin:6px 0">–</p>
+      <div class="row"><span>Description age</span><span id="sceneage">–</span></div>
+    </section>
+
+    <section>
+      <h2>Connections</h2>
+      <p class="explain">Green means that part is answering.</p>
+      <div id="links"></div>
+    </section>
+
+    <section>
+      <h2>This run</h2>
+      <div class="row"><span>Decisions</span><span id="decisions">–</span></div>
+      <div class="row"><span>Moves sent</span><span id="nsent">–</span></div>
+      <div class="row"><span>Stopped by the safety gate</span><span id="ngate">–</span></div>
+      <div class="row"><span>Refused by the rover</span><span id="nrefused">–</span></div>
+      <div class="row"><span>Jev calls</span><span id="calls">–</span></div>
+      <div class="row"><span>Log file</span><span id="log" class="muted">–</span></div>
+    </section>
+  </div>
+</div>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const ACTIONS = ["forward", "turn_left", "turn_right", "reverse", "stop"];
+const ICON = { forward: "↑", turn_left: "↰", turn_right: "↱", reverse: "↓", stop: "■" };
+const DOING = { forward: "Driving forward", turn_left: "Turning left", turn_right: "Turning right",
+                reverse: "Backing up", stop: "Standing still" };
 const SENSORS = [
-  ["distance_cm", "distance", "cm"], ["pitch", "pitch", "°"], ["roll", "roll", "°"],
-  ["temperature", "temperature", "°C"], ["humidity", "humidity", "%"],
-  ["pressure", "pressure", "hPa"], ["vibration", "vibration", "g"],
-  ["last_event", "last event", ""],
+  ["distance_cm", "distance ahead", "cm"], ["pitch", "tilt front/back", "°"],
+  ["roll", "tilt side", "°"], ["temperature", "temperature", "°C"],
+  ["humidity", "humidity", "%"], ["pressure", "air pressure", "hPa"],
+  ["vibration", "vibration", "g"], ["last_event", "last event", ""],
 ];
+const GAUGE_MAX = 200;
 let shownPhoto = -1;
 let failures = 0;
+let limits = { min_confidence: 0.6, safe_distance_cm: 30 };
 
 function set(id, text, cls) {
   const el = $(id);
@@ -173,6 +258,46 @@ function set(id, text, cls) {
 }
 const age = (ms) => (ms == null ? "–" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 const words = (a) => (a ? a.replace("_", " ") : "–");
+const pct = (p) => `${Math.round(p * 100)}%`;
+const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour12: false });
+
+// The gate's short reasons, in plain words.
+function plainReason(reason) {
+  if (!reason) return "–";
+  if (reason === "approved") return "Passed every safety check.";
+  if (reason === "Jev chose stop") return "Jev itself chose to stop.";
+  const unsure = reason.match(/^Jev unsure \(([\d.]+)\)$/);
+  if (unsure) {
+    return `Jev was only ${pct(+unsure[1])} sure. It must be at least ` +
+           `${pct(limits.min_confidence)} sure, so the rover was stopped to be safe.`;
+  }
+  if (reason === "telemetry too old") return "The sensor readings were too old to trust.";
+  if (reason === "camera description too old") return "The camera description was too old to trust.";
+  if (reason === "no answer from Jev") return "Jev gave no answer (an error, or the call limit was reached).";
+  if (reason === "Jev says path blocked but chose forward") {
+    return "Jev said the way looks blocked, yet chose forward. That doesn't add up, so: stop.";
+  }
+  const mode = reason.match(/^rover in (\w+) mode$/);
+  if (mode) return `The rover is in ${mode[1]} mode, not Jev Auto, so nothing was sent.`;
+  return reason;
+}
+
+// Green: Jev's move went through. Amber: the gate stopped it. Red: an error.
+function outcome(d) {
+  if (d.reply && !d.reply.ok) return ["refused by rover", "bad"];
+  if (!d.action) return ["no answer, stopped", "bad"];
+  if (d.approved && d.sent) return ["sent", "ok"];
+  if (d.approved) return ["not sent", "warn"];
+  return [d.sent ? "gate stopped it" : "nothing sent", "warn"];
+}
+
+function distanceWords(cm) {
+  const safe = limits.safe_distance_cm;
+  if (cm == null || cm < 0) return ["no reading", "warn"];
+  if (cm < safe / 2) return ["very close: danger", "bad"];
+  if (cm < safe) return ["close", "warn"];
+  return ["clear", "ok"];
+}
 
 async function post(path) {
   try {
@@ -191,7 +316,14 @@ function banner(text, bad) {
   b.style.display = text ? "block" : "none";
 }
 
+function step(n, what, why, cls) {
+  set(`s${n}what`, what);
+  set(`s${n}why`, why);
+  $(`s${n}`).className = `step ${cls || ""}`;
+}
+
 function render(s) {
+  if (s.limits) limits = s.limits;
   const mode = s.mode || "unknown";
   set("mode", `rover: ${mode}`, `badge ${mode === "jev" ? "ok" : "warn"}`);
   let run = ["driving", "ok"];
@@ -207,55 +339,129 @@ function render(s) {
   else if (mode !== "jev") banner("The rover isn't in Jev Auto. Press Jev Auto on its control page to let Jev drive.");
   else banner("");
 
-  // camera
-  if (s.photo_id !== shownPhoto && s.photo_id > 0) {
-    shownPhoto = s.photo_id;
-    $("photo").src = `/photo?n=${s.photo_id}`;
-  }
+  const t = s.telemetry || {};
   const sc = s.scene || {};
-  set("summary", sc.summary || "No description yet.");
-  set("obstacle", sc.obstacle_ahead == null ? "–" : sc.obstacle_ahead ? "yes" : "no",
-      sc.obstacle_ahead ? "warn-text" : "");
-  set("clear", sc.clear_side || "–");
-  set("hazards", sc.hazards && sc.hazards.length ? sc.hazards.join(", ") : "none");
-  set("sceneage", age(s.scene_age_ms));
-
-  // Jev
   const last = s.last;
-  set("action", last && last.action ? words(last.action) : last ? "no answer" : "–");
+  const cm = typeof t.distance_cm === "number" ? t.distance_cm : null;
+  const [dWord, dCls] = distanceWords(cm);
+
+  // 1. sees
+  step(1, cm == null ? "no reading" : `${Math.round(cm)} cm ahead`,
+       `${dWord}. ${sc.summary || ""}`, dCls);
+  const safe = limits.safe_distance_cm;
+  $("gauge").style.setProperty("--d1", `${(safe / 2 / GAUGE_MAX) * 100}%`);
+  $("gauge").style.setProperty("--d2", `${(safe / GAUGE_MAX) * 100}%`);
+  $("mark").style.left = `${Math.min(Math.max(cm ?? 0, 0), GAUGE_MAX) / GAUGE_MAX * 100}%`;
+  set("gmid", `safe: ${safe} cm`);
+
+  // 2-4. Jev, gate, rover
+  if (!last) {
+    step(2, "–", "Waiting for Jev's first answer.");
+    step(3, "–", "");
+    step(4, "–", "");
+  } else {
+    const sure = last.confidence != null ? pct(last.confidence) : null;
+    if (last.action) {
+      step(2, `${ICON[last.action] || ""} ${words(last.action)}`,
+           `${sure} sure.` + (last.confidence < limits.min_confidence ? " That's not sure enough." : ""),
+           last.confidence < limits.min_confidence ? "warn" : "ok");
+    } else {
+      step(2, "no answer", "Jev didn't answer.", "bad");
+    }
+    step(3, last.approved ? "approved" : last.sent === "stop" ? "stopped it" : "held back",
+         plainReason(last.reason), last.approved ? "ok" : "warn");
+    const reply = last.reply;
+    if (reply && !reply.ok) step(4, "refused", `The rover said no: ${reply.refused || "unknown"}.`, "bad");
+    else if (last.sent) step(4, DOING[last.sent] || words(last.sent), "The rover said OK.", last.sent === "stop" ? "warn" : "ok");
+    else step(4, "nothing sent", s.suggest_only ? "Suggest-only mode: we only watch." : "No command this time.", "warn");
+  }
+
+  // the one-sentence story
+  let story;
+  if (s.paused) story = "You pressed STOP. The rover is standing still and Jev is paused.";
+  else if (s.jev.budget_spent) story = "Jev's call limit for this run is used up, so the rover was stopped and the run is ending.";
+  else if (mode !== "jev") story = "The rover isn't in Jev Auto mode yet, so Jev can't drive it.";
+  else if (!last) story = "Waiting for Jev's first decision…";
+  else if (last.approved && last.sent && last.sent !== "stop") {
+    story = `The way ahead is ${dWord}${cm != null ? ` (${Math.round(cm)} cm)` : ""}, so Jev chose ` +
+            `${words(last.action)} and the rover is ${DOING[last.sent].toLowerCase()}.`;
+  } else if (last.approved) story = "Jev chose to stop, so the rover is standing still.";
+  else story = `The safety gate stopped the rover: ${plainReason(last.reason)}`;
+  set("story", story);
+
+  // history
+  const body = $("history");
+  body.replaceChildren();
+  const hist = (s.history || []).slice().reverse();
+  if (!hist.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 6; td.className = "muted"; td.textContent = "No decisions yet.";
+    tr.append(td); body.append(tr);
+  }
+  for (const d of hist) {
+    const [label, cls] = outcome(d);
+    const dist = (d.told_jev || "").match(/Distance ahead: (\d+) cm/);
+    const cells = [
+      clock(d.t),
+      dist ? `${dist[1]} cm` : "–",
+      d.action ? `${ICON[d.action] || ""} ${words(d.action)}` : "no answer",
+      d.confidence != null ? pct(d.confidence) : "–",
+      null,
+      plainReason(d.reason),
+    ];
+    const tr = document.createElement("tr");
+    cells.forEach((c, i) => {
+      const td = document.createElement("td");
+      if (i === 2) td.className = "move";
+      if (i === 4) {
+        const chip = document.createElement("span");
+        chip.className = `chip ${cls}`;
+        chip.textContent = label;
+        td.append(chip);
+      } else {
+        td.textContent = c;
+      }
+      if (i === 5) td.className = "muted";
+      tr.append(td);
+    });
+    body.append(tr);
+  }
+
+  // how sure
   const probs = $("probs");
-  probs.replaceChildren();
   if (last && last.probabilities) {
+    probs.replaceChildren();
     for (const a of ACTIONS) {
       const p = last.probabilities[a] || 0;
       const row = document.createElement("div");
       row.className = a === last.action ? "bar top" : "bar";
       const name = document.createElement("span");
-      name.textContent = words(a);
+      name.textContent = `${ICON[a]} ${words(a)}`;
       const track = document.createElement("div");
       track.className = "track";
       const fill = document.createElement("div");
       fill.className = "fill";
-      fill.style.width = `${Math.round(p * 100)}%`;
-      track.append(fill);
-      const pct = document.createElement("span");
-      pct.textContent = `${Math.round(p * 100)}%`;
-      row.append(name, track, pct);
+      fill.style.width = pct(p);
+      const need = document.createElement("div");
+      need.className = "need";
+      need.style.left = pct(limits.min_confidence);
+      track.append(fill, need);
+      const v = document.createElement("span");
+      v.textContent = pct(p);
+      row.append(name, track, v);
       probs.append(row);
     }
   }
-  set("calls", s.jev.mode === "live" ? `${s.jev.calls} of ${s.jev.max_calls}` : "pretend Jev (free)");
+  set("told", last && last.told_jev ? last.told_jev : "–");
 
-  // gate
-  if (!last) set("gate", "–", "big");
-  else if (last.approved) set("gate", "approved", "big ok-text");
-  else set("gate", last.sent === "stop" || !last.sent ? "stopped" : "held", "big warn-text");
-  $("gate").style.fontSize = "22px";
-  set("reason", last ? last.reason : "–");
-  set("sent", last ? (last.sent ? words(last.sent) : s.suggest_only ? "nothing (suggest only)" : "nothing") : "–");
-  const reply = last && last.reply;
-  set("reply", !reply ? "–" : reply.ok ? "ok" : `refused: ${reply.refused || "unknown"}`,
-      reply && !reply.ok ? "bad-text" : "");
+  // camera
+  if (s.photo_id !== shownPhoto && s.photo_id > 0) {
+    shownPhoto = s.photo_id;
+    $("photo").src = `/photo?n=${s.photo_id}`;
+  }
+  set("summary", sc.summary || "No description yet.");
+  set("sceneage", age(s.scene_age_ms));
 
   // links
   const links = $("links");
@@ -279,7 +485,6 @@ function render(s) {
   // sensors
   const box = $("sensors");
   box.replaceChildren();
-  const t = s.telemetry || {};
   for (const [key, label, unit] of SENSORS) {
     if (!(key in t)) continue;
     const cell = document.createElement("div");
@@ -299,6 +504,7 @@ function render(s) {
   set("nsent", s.stats.sent);
   set("ngate", s.stats.stopped_by_gate);
   set("nrefused", s.stats.refused);
+  set("calls", s.jev.mode === "live" ? `${s.jev.calls} of ${s.jev.max_calls} (real, costs credits)` : "pretend Jev (free)");
   set("log", s.log, "muted");
 }
 
@@ -311,6 +517,7 @@ async function refresh() {
   } catch (e) {
     if (++failures < 3) return; // one slow answer is not a problem
     set("run", "not running", "badge bad");
+    set("story", "The Earth Station has stopped. This page shows the last thing it saw.");
     $("stop").disabled = true;
     $("resume").hidden = true;
     banner("The Earth Station isn't running. Start it again in the terminal; this page reconnects by itself.", true);
@@ -318,14 +525,12 @@ async function refresh() {
 }
 
 $("photo").addEventListener("load", () => {
-  $("photo").style.display = "block";
-  $("nophoto").style.display = "none";
+  $("photobox").style.display = "block";
+  set("camnote", "The latest photo and its description.", "explain");
 });
 $("photo").addEventListener("error", () => {
-  $("photo").style.display = "none";
-  $("nophoto").style.display = "block";
-  $("nophoto").textContent =
-    "This photo can't be shown here. The simulator sends a pretend photo with no picture in it.";
+  $("photobox").style.display = "none";
+  set("camnote", "The simulator sends pretend photos with no picture in them, so only the description is shown.", "explain");
 });
 $("stop").addEventListener("click", () => post("/stop"));
 $("resume").addEventListener("click", () => post("/resume"));
