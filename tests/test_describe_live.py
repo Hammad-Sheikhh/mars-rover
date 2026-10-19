@@ -188,10 +188,18 @@ def test_gemini_request_sends_photo_schema_and_no_thinking(gemini):
     assert image["inline_data"]["mime_type"] == "image/jpeg"
     assert "rover" in prompt["text"]
     cfg = req["json"]["generationConfig"]
-    assert cfg["thinkingConfig"] == {"thinkingBudget": 0}
+    # Flash-Lite cannot switch thinking off (the API 400s), so nothing is sent.
+    assert "thinkingConfig" not in cfg
     schema = cfg["responseSchema"]
     assert set(schema["required"]) == set(SCENE)
     assert "additionalProperties" not in schema
+
+
+def test_gemini_flash_models_that_can_get_thinking_budget_zero(gemini):
+    fake = FakeGemini(GEMINI_OK)
+    run_gemini(PHOTO, replace(gemini, vision_model="gemini-3-flash"), fake)
+    cfg = fake.request["json"]["generationConfig"]
+    assert cfg["thinkingConfig"] == {"thinkingBudget": 0}
 
 
 def test_gemini_prompt_mentions_the_focus_list(gemini):

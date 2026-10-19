@@ -194,6 +194,12 @@ def _gemini_error(response: Any) -> str:
     return detail or response.text[:120]
 
 
+def _gemini_disables_thinking(model: str) -> bool:
+    """Flash-Lite can't switch thinking off (400), and thinks so little it
+    doesn't matter; the ordinary Flash models accept a thinking budget of 0."""
+    return "lite" not in model
+
+
 async def _describe_gemini(jpeg: bytes, settings: Settings, client: Any = None) -> dict[str, Any]:
     client = client or _gemini_client(settings)
     body = {
@@ -216,10 +222,11 @@ async def _describe_gemini(jpeg: bytes, settings: Settings, client: Any = None) 
             "responseMimeType": "application/json",
             "responseSchema": GEMINI_SCHEMA,
             "maxOutputTokens": 2000,
-            # No thinking: describe directly and cheaply; Jev does the reasoning.
-            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
+    if _gemini_disables_thinking(settings.vision_model):
+        # No thinking where it can be switched off: describe directly; Jev reasons.
+        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
     try:
         response = await client.post(f"/models/{settings.vision_model}:generateContent", json=body)
         response.raise_for_status()
