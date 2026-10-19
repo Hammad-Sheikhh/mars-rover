@@ -48,7 +48,7 @@ graph TD
 | Earth Station (`earth_station/`) | ✅ Finds the real boards by name and drives them over the hotspot (drive commands + safety vetoes verified on hardware) |
 | Rover Jev Auto mode (firmware 2.1) | ✅ Hardware-tested (19/20 Oct 2026): all four drive moves, obstacle veto (<20 cm), watchdog, token check ([SPEC.md](SPEC.md) milestone 3) |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
-| Photo descriptions with Claude vision (`describe.py`) | ⏸ Code ready and tested with a fake Claude. Optional and off by default, because the API costs money; without it, Jev drives on the sensors (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
+| Photo descriptions with Gemini vision (`describe.py`) | ⏸ Code ready and tested with a fake Gemini. Optional and off by default; a free Google AI Studio key makes it cost $0 (one photo every ~5 s). Claude still works as a paid alternative (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
 | Camera name `cam.local` and `/id` (firmware 2.1) | ✅ Hardware-tested: found by name on the hotspot, `/id` answered, photo uploads flow ([SPEC.md](SPEC.md) milestone 4) |
@@ -218,27 +218,30 @@ If someone else flashes the rover, send them `rover1/secrets.h` (or just the tok
    - The tests never call the real Jev.
 6. If it fails, the pre-flight line says why: `rejected the API key` means the key is wrong, and `rate-limited` means wait a moment and try again. To go back to the offline stand-in, set `JEV_MODE=mock`.
 
-### D. Real photo descriptions with Claude (optional, paid)
+### D. Real photo descriptions with Gemini (optional, free)
 
-Jev can't see pictures, so Claude can look at each camera photo and write a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
+Jev can't see pictures, so a vision AI can look at each camera photo and write a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
 
-**You can skip this part.** It needs a paid Anthropic API key: roughly 1 cent per photo, or $15–25 per hour of driving on the default model. Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply.
+**You can skip this part.** The recommended provider is Google's Gemini, which has a **free tier** (no credit card): one photo every ~5 s costs $0. Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply. Keep the photo rate gentle (`CAMERA_EVERY_MS=5000`); faster rates need billing enabled, at roughly $0.05–0.12 per hour of driving.
 
-1. Get a key: sign in at [console.anthropic.com](https://console.anthropic.com), add some credit under **Billing**, then create a key under **API Keys**. Copy it.
+1. Get a key: sign in at [aistudio.google.com](https://aistudio.google.com) with a Google account, click **Get API key**, create one, copy it.
 2. Open `.env` and set:
    ```sh
    DESCRIBE_MODE=live
+   VISION_PROVIDER=gemini
    VISION_API_KEY=<paste your key here>
+   CAMERA_EVERY_MS=5000
    ```
    Save the file. Like the Jev key, it never goes to GitHub. Never paste it into code, issues or chat.
-3. Try it on any photo saved on the laptop (internet needed, no rover):
+3. Tell it what matters most in your rooms — comma-separated in `VISION_FOCUS` (e.g. `cables on the floor, stairs or drops, pet or person's feet`). The description Jev reads will bias towards those objects.
+4. Try it on any photo saved on the laptop (internet needed, no rover):
    ```sh
    python -m earth_station.describe path/to/photo.jpg
    ```
    It prints the description and how many seconds it took. You can give several photos at once.
-4. If it fails, the message says why: `rejected VISION_API_KEY` means the key is wrong, and `cannot reach` means no internet. To go back to the offline stand-in, set `DESCRIBE_MODE=mock`.
+5. If it fails, the message says why: `rejected VISION_API_KEY` means the key is wrong, `rate limit` means the free tier wants slower photos, and `cannot reach` means no internet. To go back to the offline stand-in, set `DESCRIBE_MODE=mock`.
 
-The default model is `claude-opus-5-5` at `VISION_EFFORT=low` (it thinks briefly, which is quicker and cheaper). You can change either one in `.env`; see [docs/EARTH_STATION.md](docs/EARTH_STATION.md#settings-env).
+**Prefer Claude?** Set `VISION_PROVIDER=anthropic` and `VISION_MODEL=claude-opus-5-5`, put an Anthropic key in `VISION_API_KEY` ([console.anthropic.com](https://console.anthropic.com), paid), and leave `CAMERA_EVERY_MS` as you like. The description shape and every message stay the same — only `.env` changes.
 
 ### E. Supabase (optional, will be removed later)
 The boards also upload readings and photos to Supabase. To use it, put `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` (the **anon** key only, never `service_role`), then run [`docs/supabase/schema.sql`](docs/supabase/schema.sql) in the Supabase SQL editor. It creates:

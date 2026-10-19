@@ -156,10 +156,12 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `JEV_MODE` | `mock` | `mock` = offline stand-in, `live` = real Jev API (needs `JEV_API_KEY`) |
 | `JEV_API_KEY` | empty | Your key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys) |
 | `JEV_API_URL` / `JEV_MODEL` | `https://api.typesafe.ai/v1/systemone` / `jev-latest` | Usually leave as they are |
-| `DESCRIBE_MODE` | `mock` | `mock` = no paid vision: the simulator's hidden scene, or for a real photo "no camera vision, use the distance sensor". `live` = Claude vision (needs `VISION_API_KEY`, costs money) |
-| `VISION_API_KEY` | empty | An Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
-| `VISION_MODEL` | `claude-opus-5-5` | Which Claude model describes the photos |
-| `VISION_EFFORT` | `low` | How hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
+| `DESCRIBE_MODE` | `mock` | `mock` = no live vision: the simulator's hidden scene, or for a real photo "no camera vision, use the distance sensor". `live` = a vision AI describes each photo (needs `VISION_API_KEY`) |
+| `VISION_PROVIDER` | `anthropic` in code, `gemini` in `.env.example` | Which vision AI to use: `gemini` (free key from [aistudio.google.com](https://aistudio.google.com)) or `anthropic` (Claude, paid) |
+| `VISION_API_KEY` | empty | The key of the provider above (Gemini or Anthropic) |
+| `VISION_MODEL` | `claude-opus-5-5` | Which model describes the photos. For Gemini use `gemini-flash-lite-latest` (free-tier friendly: set `CAMERA_EVERY_MS=5000`) |
+| `VISION_FOCUS` | empty | Comma-separated objects the vision AI should watch out for (e.g. `cables on the floor, stairs or drops`). Added to the photo prompt for either provider |
+| `VISION_EFFORT` | `low` | Anthropic only: how hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
 | `VISION_TIMEOUT_S` | `10` | Give up on one photo after this many seconds (the scene goes stale and the gate stops the rover) |
 | `DECIDE_EVERY_MS` | `500` | How often Jev is asked |
 | `JEV_MAX_CALLS` | `20` | Most real Jev calls in one run (pre-flight included). Then the station stops the rover and ends the run. Only counts with `JEV_MODE=live` |
@@ -191,7 +193,7 @@ flowchart LR
 | `earth_station/station.py` | The workers and the decision cycle |
 | `earth_station/whiteboard.py` | Shared notebook, with a timestamp on every value |
 | `earth_station/links.py` | HTTP to the rover and camera |
-| `earth_station/describe.py` | Photo → short description (Claude vision, or the mock) |
+| `earth_station/describe.py` | Photo → short description (Gemini or Claude vision, or the mock) |
 | `earth_station/state_text.py` | Numbers → plain words for Jev |
 | `earth_station/jev_client.py` | Jev API client, plus the mock policy |
 | `earth_station/safety_gate.py` | The six laptop-side safety rules |
@@ -273,4 +275,4 @@ CI runs both on every pull request.
 
 * **Rover firmware on hardware.** The code is written and compiles in CI, but it hasn't been tested on the real rover yet.
 * **Camera `cam.local` and `/id` on hardware** ([SPEC.md](../SPEC.md) milestone 4). Written (firmware 2.1) and compiled in CI; waiting for the teammate's test.
-* **Photo descriptions on real photos** ([SPEC.md](../SPEC.md) milestone 5). The code is done and tested with a fake Claude. Still to do: try it with a real Anthropic key on photos from the rover camera, and measure speed and cost.
+* **Photo descriptions on real photos** ([SPEC.md](../SPEC.md) milestone 5). The code is done and tested with a fake Gemini/Claude. Still to do: try it with a real Gemini key on photos from the rover camera, and measure speed.
