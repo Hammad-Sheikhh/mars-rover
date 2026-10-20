@@ -9,7 +9,14 @@
 #include "secrets.h" // credentials (git-ignored) - copy secrets.example.h to secrets.h
 
 /* ================= IDENTITY ================= */
-const char* FIRMWARE_VERSION = "2.1.0";
+const char* FIRMWARE_VERSION = "2.2.0";
+
+/* 1 = also capture and upload photos to Supabase Storage every 10 s.
+   Off by default: the upload's TLS handshake takes 1-4 s and stalls the
+   /capture web server while it runs - the Earth Station bench measured
+   capture p95 of 2 s with it on vs under 0.5 s with it off. What the rover
+   sees now reaches the Earth Station as live vision descriptions instead. */
+#define SUPABASE_UPLOAD 0
 const char* MDNS_NAME = "cam";                // reachable as http://cam.local on the hotspot
 
 /* ================= WIFI ================= */
@@ -324,9 +331,14 @@ void setup() {
 
     esp_timer_create_args_t timer_args = { .callback = &timer_cb, .name = "mars_timer" };
     esp_timer_create(&timer_args, &capture_timer);
-    esp_timer_start_periodic(capture_timer, 10000000); // 10 seconds (slower for debugging)
-    
+    if (SUPABASE_UPLOAD) {
+        esp_timer_start_periodic(capture_timer, 10000000); // 10 seconds (slower for debugging)
+    }
+
     Serial.println("System Ready. Waiting for timer...");
+    if (!SUPABASE_UPLOAD) {
+        Serial.println("Supabase uploads are off (SUPABASE_UPLOAD 0): the camera only serves /capture now.");
+    }
 }
 
 /* ================= LOOP ================= */
