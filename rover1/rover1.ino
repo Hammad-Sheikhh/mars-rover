@@ -13,6 +13,13 @@
 const char* wifiSSID = WIFI_SSID;
 const char* wifiPass = WIFI_PASS;
 // ---------- Supabase Configuration ----------
+// Periodic sensor uploads are OFF by default (firmware 2.2.0, same fix as the camera):
+// the blocking TLS handshake every 5 s starved the web server, making /sensors/data
+// and /jev/cmd time out mid-drive. Telemetry is recorded by the Earth Station's
+// JSONL run logs instead. Turn back on (SUPABASE_UPLOAD 1) only while debugging.
+#ifndef SUPABASE_UPLOAD
+#define SUPABASE_UPLOAD 0
+#endif
 const String supabaseUrl = SUPABASE_URL;
 const String supabaseKey = SUPABASE_ANON_KEY;
 // ---------- Data Send Interval ----------
@@ -27,7 +34,7 @@ WebServer server(80);                   // class/object/port 80 is standard path
 #error "Add ROVER_CMD_TOKEN to rover1/secrets.h (see secrets.example.h)"
 #endif
 const char* roverCmdToken = ROVER_CMD_TOKEN;  // laptop must send this in the X-Token header
-const char* FIRMWARE_VERSION = "2.1.0";
+const char* FIRMWARE_VERSION = "2.2.0";
 const char* MDNS_NAME = "rover";              // reachable as http://rover.local on the hotspot
 const unsigned long JEV_WATCHDOG_MS = 1500;   // no command for this long -> stop
 const unsigned long JEV_MAX_MOVE_MS = 500;    // longest single move
@@ -171,6 +178,9 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   }
   if (WiFi.status() == WL_CONNECTED) {    // checks if esp is connected to wifi 
     Serial.println("\nWiFi station connected. IP: " + WiFi.localIP().toString());  // print ip
+#if !SUPABASE_UPLOAD
+    Serial.println("Supabase uploads are off (SUPABASE_UPLOAD 0): the rover only serves control + Jev.");
+#endif
     if (MDNS.begin(MDNS_NAME)) {           // announce rover.local so nobody types the IP
       MDNS.addService("http", "tcp", 80);
       Serial.println("Name: http://rover.local");
@@ -254,9 +264,9 @@ lastAccX = curX; lastAccY = curY;
     forward(FORWARD_SPEED);
   }
   // Send data to Supabase periodically if connected
-  // send data every 5s without using delay 
-  // main character -> milis function -> like a stopwatch
-  if (WiFi.status() == WL_CONNECTED && millis() - lastSendTime >= sendIntervalMs) {
+  // OFF by default (SUPABASE_UPLOAD 0): the blocking TLS handshake starved the
+  // web server, so /sensors/data and /jev/cmd timed out mid-drive. See PR: camera fix 2.2.0.
+  if (SUPABASE_UPLOAD && WiFi.status() == WL_CONNECTED && millis() - lastSendTime >= sendIntervalMs) {
     lastSendTime = millis();
     sendDataToSupabase();
   }
