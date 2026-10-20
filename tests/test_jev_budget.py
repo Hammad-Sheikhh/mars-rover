@@ -77,6 +77,99 @@ def test_sim_uses_the_pretend_jev_unless_asked(args, expected):
     assert jev_override(build_parser().parse_args(args)) == expected
 
 
+def test_no_jev_call_while_the_scene_is_stale(settings):
+    """A stale description can only produce a gate veto, so no credit is spent on it."""
+    jev_calls, commands = [], []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.typesafe.ai":
+            jev_calls.append(request)
+            return httpx.Response(200, json=DOCUMENTED_REPLY)
+        if request.url.path == "/jev/cmd":
+            commands.append(request.read())
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404)
+
+    s = replace(
+        _live(settings, 3),
+        rover_url="http://rover.test",
+        camera_url="http://cam.test",
+        decide_every_ms=1,
+        telemetry_max_age_ms=60_000,
+        scene_max_age_ms=50,
+    )
+
+    async def go():
+        log = Logger(s.log_dir)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            st = Station(s, client, log)
+            st.board.post_telemetry({"mode": "jev", "distance_cm": 100})
+            st.board.post_scene(
+                {
+                    "summary": "open floor",
+                    "obstacle_ahead": False,
+                    "clear_side": "both",
+                    "hazards": [],
+                }
+            )
+            await asyncio.sleep(0.1)  # let the description go stale
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(st.decision_maker(), timeout=0.2)
+        log.close()
+        return st
+
+    st = asyncio.run(go())
+    assert jev_calls == []  # nothing was sent to the paid AI
+    assert len(commands) == 1  # one stop, then it waits quietly
+    assert b'"stop"' in commands[0]
+    assert not st.jev_budget_spent
+
+
+def test_run_ends_at_the_limit_even_when_the_scene_is_stale(settings):
+    """A spent budget ends the run; it must not sit in the freshness hold forever."""
+    jev_calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "api.typesafe.ai":
+            jev_calls.append(request)
+            return httpx.Response(200, json=DOCUMENTED_REPLY)
+        if request.url.path == "/jev/cmd":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404)
+
+    s = replace(
+        _live(settings, 1),
+        rover_url="http://rover.test",
+        camera_url="http://cam.test",
+        decide_every_ms=1,
+        telemetry_max_age_ms=60_000,
+        scene_max_age_ms=50,
+    )
+
+    async def go():
+        log = Logger(s.log_dir)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            st = Station(s, client, log)
+            st.jev.calls = 1  # the budget was already spent (e.g. by pre-flight)
+            st.board.post_telemetry({"mode": "jev", "distance_cm": 100})
+            st.board.post_scene(
+                {
+                    "summary": "open floor",
+                    "obstacle_ahead": False,
+                    "clear_side": "both",
+                    "hazards": [],
+                }
+            )
+            await asyncio.sleep(0.1)  # stale: without the budget check this would hold
+            await asyncio.wait_for(st.decision_maker(), timeout=1)
+        log.close()
+        return st
+
+    st = asyncio.run(go())
+    assert jev_calls == []  # no call past the limit
+    assert st.jev_budget_spent
+
+
 def test_station_stops_the_rover_and_ends_the_run_at_the_limit(settings):
     """With a limit of 3: 3 Jev answers, then a stop to the rover, then the run ends."""
     jev_calls, commands = [], []
@@ -118,6 +211,7 @@ def test_station_stops_the_rover_and_ends_the_run_at_the_limit(settings):
             feeder = asyncio.create_task(fresh_board())
             await asyncio.wait_for(st.decision_maker(), timeout=5)  # returns by itself
             feeder.cancel()
+            await st.land()  # the station's final stop, as in a real run
         log.close()
         return st
 

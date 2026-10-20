@@ -7,7 +7,7 @@ import httpx
 
 from earth_station import sim
 from earth_station.logger import Logger
-from earth_station.station import Station
+from earth_station.station import Station, _next_vision_backoff
 
 
 def run_station(settings, world, cycles=12, suggest_only=False):
@@ -88,3 +88,10 @@ def test_boards_identify_themselves():
     finally:
         for srv in (rover, camera):
             srv.shutdown()
+
+
+def test_vision_backoff_doubles_and_caps():
+    assert _next_vision_backoff(0) == 15.0
+    assert _next_vision_backoff(15.0) == 30.0
+    assert _next_vision_backoff(60.0) == 120.0
+    assert _next_vision_backoff(120.0) == 120.0
