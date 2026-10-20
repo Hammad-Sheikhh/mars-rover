@@ -56,7 +56,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page. **Firmware 2.5.5 is flashed and verified on the hotspot** (`/id` answers `2.5.5`, all 12 `--check` items pass), so the floor drive can start; the placement recipe is in session 13's log.
+1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page. **Firmware 2.5.5 is flashed and verified on the hotspot** (`/id` answers `2.5.5`, all 12 `--check` items pass), so the floor drive can start; the placement recipe is in session 13's log. `.env` currently says `JEV_MODE=mock`, so use **`--live-jev`** for the real drive (the Jev API key is already set), or set `JEV_MODE=live`.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. ~~Later: a free way for the camera to help Jev~~ **Built and live-tested with the real Gemini key.** Now: flash the camera with the Arduino IDE steps (they're in the leader's task notes), then run `python -m earth_station.bench all` on it, and on a pass go to milestone 8 (first real drive with vision).
 
