@@ -34,7 +34,7 @@ WebServer server(80);                   // class/object/port 80 is standard path
 #error "Add ROVER_CMD_TOKEN to rover1/secrets.h (see secrets.example.h)"
 #endif
 const char* roverCmdToken = ROVER_CMD_TOKEN;  // laptop must send this in the X-Token header
-const char* FIRMWARE_VERSION = "2.5.1";
+const char* FIRMWARE_VERSION = "2.5.2";
 const char* MDNS_NAME = "rover";              // reachable as http://rover.local on the hotspot
 const unsigned long JEV_WATCHDOG_MS = 1500;   // no command for this long -> stop
 const unsigned long JEV_MAX_MOVE_MS = 500;    // longest single move
@@ -204,19 +204,25 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   }
   // NEW: Set WiFi to dual mode (AP + Station)
   WiFi.setHostname(MDNS_NAME);
-  WiFi.mode(WIFI_AP_STA);         // key word for ap + station mode
   WiFi.setSleep(false);           // 2.5.0: STA modem sleep caused 8-200 ms ping jitter and TX bursts that SATURATED the web server (costs ~20-40 mA battery)
+  // 2.5.2: join the hotspot ALONE first (WIFI_STA), AP comes up only after a
+  // clean station connect. Running our own AP at the same time confuses some
+  // phone hotspots into a "state: run -> init" reconnect loop at boot.
+  WiFi.disconnect(true);          // clean slate: forget any half-state from before
+  WiFi.mode(WIFI_STA);
   // NEW: Connect to WiFi (station mode) for internet
   WiFi.begin(wifiSSID, wifiPass);
   Serial.print("Connecting to WiFi station...");
   int wifiAttempts = 0;
-  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) { // this loop tries 20 times to reconect if connection fails
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 40) { // 40 x 0.5 s = 20 s (2.5.2: was 10 s - a slow phone needs longer)
     delay(500);
     Serial.print(".");
     wifiAttempts++;
+    if (wifiAttempts % 10 == 0) Serial.printf(" (status %d)\n", WiFi.status()); // 0=idle 1=no-sid 4=ok 5=failed 6=wrong-pass 7=assoc-lost... tell-tale when it won't join
   }
-  if (WiFi.status() == WL_CONNECTED) {    // checks if esp is connected to wifi 
+  if (WiFi.status() == WL_CONNECTED) {    // checks if esp is connected to wifi
     Serial.println("\nWiFi station connected. IP: " + WiFi.localIP().toString());  // print ip
+    WiFi.mode(WIFI_AP_STA);               // 2.5.2: station is stable - now bring our own AP up beside it
 #if !SUPABASE_UPLOAD
     Serial.println("Supabase uploads are off (SUPABASE_UPLOAD 0): the rover only serves control + Jev.");
 #endif
@@ -227,9 +233,33 @@ The "Correction": This average is saved as the Offset. From now on, every time t
       Serial.println("mDNS failed - use the IP above");
     }
   } else {
-    Serial.println("\nWiFi station connection failed. Data sending disabled.");
+    // 2.5.2: one clean-slate retry before giving up (a first join can fail on a
+    // busy channel; the disconnect+begin cycle below has cleared it before)
+    Serial.printf("\nFirst join failed (status %d). One clean retry...\n", WiFi.status());
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(wifiSSID, wifiPass);
+    int retry = 0;
+    while (WiFi.status() != WL_CONNECTED && retry < 20) {   // another 10 s
+      delay(500);
+      Serial.print(".");
+      retry++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nWiFi station connected on retry. IP: " + WiFi.localIP().toString());
+      WiFi.mode(WIFI_AP_STA);
+      if (MDNS.begin(MDNS_NAME)) {
+        MDNS.addService("http", "tcp", 80);
+        Serial.println("Name: http://rover.local");
+      } else {
+        Serial.println("mDNS failed - use the IP above");
+      }
+    } else {
+      Serial.printf("\nWiFi station connection failed (status %d). Check the hotspot.\n", WiFi.status());
+    }
   }
   // WiFi AP and routes (AP mode for local web UI)
+  WiFi.mode(WIFI_AP_STA);          // 2.5.2: guarantee dual mode even when the station never joined
   WiFi.softAP(apSSID, apPass);     // web server
   IPAddress apIP = WiFi.softAPIP();
   Serial.print("AP IP: "); Serial.println(apIP);
