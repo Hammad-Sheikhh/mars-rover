@@ -90,6 +90,48 @@ def test_boards_identify_themselves():
             srv.shutdown()
 
 
+def test_preflight_retries_a_rover_sensor_hiccup(settings):
+    """A single truncated /sensors/data answer must not abort the whole pre-flight."""
+    reads = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/sensors/data":
+            reads.append(request)
+            if len(reads) < 3:
+                return httpx.Response(200, text="")  # the known hiccup: no JSON body
+            return httpx.Response(200, json={"mode": "manual", "distance_cm": 100})
+        if request.url.path == "/capture":
+            return httpx.Response(
+                200,
+                content=sim.fake_jpeg(
+                    {
+                        "summary": "open floor",
+                        "obstacle_ahead": False,
+                        "clear_side": "both",
+                        "hazards": [],
+                    }
+                ),
+            )
+        return httpx.Response(404)
+
+    async def go():
+        log = Logger(settings.log_dir)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            st = Station(
+                replace(settings, rover_url="http://rover.test", camera_url="http://cam.test"),
+                client,
+                log,
+            )
+            ok = await st.preflight()
+        log.close()
+        return ok, st
+
+    ok, st = asyncio.run(go())
+    assert ok
+    assert len(reads) == 3  # two hiccups, then the good read
+    assert st.board.mode == "manual"
+
+
 def test_vision_backoff_doubles_and_caps():
     assert _next_vision_backoff(0) == 15.0
     assert _next_vision_backoff(15.0) == 30.0

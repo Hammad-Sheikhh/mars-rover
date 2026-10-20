@@ -53,6 +53,20 @@ class Station:
         self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY)  # newest last
 
     # ---------- pre-flight ----------
+    async def _read_rover_with_retry(self, attempts: int = 3) -> dict[str, Any]:
+        """The rover's /sensors/data hiccups for a fraction of a second every ~20 s.
+        One bad read must not abort pre-flight, so give it a few quick tries."""
+        last: LinkError | None = None
+        for i in range(attempts):
+            try:
+                return await self.rover.read()
+            except LinkError as e:
+                last = e
+                if i < attempts - 1:
+                    await asyncio.sleep(0.5)
+        assert last is not None
+        raise last
+
     async def preflight(self) -> bool:
         s, log = self.s, self.log
         print(paint("Earth Station", "blue") + " pre-flight")
@@ -66,7 +80,7 @@ class Station:
         ok = True
 
         try:
-            t = await self.rover.read()
+            t = await self._read_rover_with_retry()
             self.board.post_telemetry(t)
             dist = t.get("distance_cm")
             log.check(True, f"rover answering | mode {self.board.mode} | distance {dist} cm")
