@@ -260,43 +260,44 @@ class Bench:
             "span_s": round(span, 1),
         }
 
+    async def one_probe(self, camera: links.CameraLink, n: int) -> dict[str, Any]:
+        """One probe, no waiting for Enter -- for remote runs (--probe N)."""
+        if not 1 <= n <= len(PROBES):
+            raise BenchError(f"probe {n} out of range (1-{len(PROBES)})")
+        probe = PROBES[n - 1]
+        self.say(f"\nprobe: {probe['name']}", "blue")
+        self.say(f"  {probe['instruction']}")
+        try:
+            cyc = await self.cycle(camera)
+        except (links.LinkError, DescribeError) as e:
+            self.record("bench_probe", phase="scene", name=probe["name"], ok=False, message=str(e))
+            self.say(f"  failed: {e}", "red")
+            return {
+                "name": probe["name"],
+                "ok": False,
+                "soft": probe["soft"],
+                "score": probe["score"],
+            }
+        hit = bool(probe["match"](cyc["scene"]))
+        self.record(
+            "bench_probe",
+            phase="scene",
+            name=probe["name"],
+            ok=hit,
+            score=probe["score"],
+            scene=cyc["scene"],
+            describe_ms=cyc["describe_ms"],
+        )
+        mark = paint("right", "green") if hit else paint("wrong", "red")
+        self.say(f"  {probe['name']}: {mark} -> '{cyc['scene']['summary'][:70]}'")
+        return {"name": probe["name"], "ok": hit, "soft": probe["soft"], "score": probe["score"]}
+
     async def scene(self, camera: links.CameraLink) -> dict[str, Any]:
         results: list[dict[str, Any]] = []
-        for probe in PROBES:
-            self.say(f"\nprobe: {probe['name']}", "blue")
-            print(f"  {probe['instruction']}")
-            input("  press Enter when it is set up... ")
-            try:
-                cyc = await self.cycle(camera)
-            except (links.LinkError, DescribeError) as e:
-                self.record(
-                    "bench_probe", phase="scene", name=probe["name"], ok=False, message=str(e)
-                )
-                results.append(
-                    {
-                        "name": probe["name"],
-                        "ok": False,
-                        "soft": probe["soft"],
-                        "score": probe["score"],
-                    }
-                )
-                print(f"  failed: {e}")
-                continue
-            hit = bool(probe["match"](cyc["scene"]))
-            self.record(
-                "bench_probe",
-                phase="scene",
-                name=probe["name"],
-                ok=hit,
-                score=probe["score"],
-                scene=cyc["scene"],
-                describe_ms=cyc["describe_ms"],
-            )
-            mark = paint("right", "green") if hit else paint("wrong", "red")
-            self.say(f"  {probe['name']}: {mark} -> '{cyc['scene']['summary'][:70]}'")
-            results.append(
-                {"name": probe["name"], "ok": hit, "soft": probe["soft"], "score": probe["score"]}
-            )
+        for i, _probe in enumerate(PROBES, start=1):
+            results.append(await self.one_probe(camera, i))
+            if i < len(PROBES):
+                input("\n  press Enter when the next one is set up... ")
         return {"probes": results}
 
     async def burst(
@@ -463,6 +464,13 @@ async def run(argv: list[str] | None = None) -> int:
         help="phases to run (default: smoke stamina; 'all' adds scene and burst)",
     )
     p.add_argument("--minutes", type=float, default=3.0, help="stamina phase length (default 3)")
+    p.add_argument(
+        "--probe",
+        type=int,
+        default=None,
+        metavar="N",
+        help="run only ground-truth probe N (1-based), with no Enter-waiting",
+    )
     args = p.parse_args(argv)
     given = args.phases or ["smoke", "stamina"]
     phases = list(PHASES) if "all" in given else list(given)
@@ -484,6 +492,13 @@ async def run(argv: list[str] | None = None) -> int:
         camera = links.CameraLink(client, s.camera_url)
         bench = Bench(s, describe, echo=True)
         try:
+            if args.probe:
+                result = await bench.one_probe(camera, args.probe)
+                print(
+                    f"  probe '{result['name']}': {'OK' if result['ok'] else 'missed'} "
+                    f"({bench.path.name})"
+                )
+                return 0
             if "smoke" in phases:
                 smoke = await bench.smoke(camera)
                 data["oks"], data["fails"] = smoke["oks"], smoke["fails"]
