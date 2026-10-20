@@ -222,7 +222,7 @@ Each run writes `runs/<date>_<time>.jsonl`, one JSON object per line: every deci
 
 This is the contract between the Earth Station and the rover. `rover1/rover1.ino` (firmware 2.1) and the simulator (`earth_station/sim.py`) both follow it. Change all three together.
 
-**`GET /id`**: `{"board": "rover", "firmware": "2.1.0"}`. The camera (`cam1` firmware 2.1) answers `{"board": "camera", "firmware": "2.1.0"}`. Used to recognise the boards on the network.
+**`GET /id`**: `{"board": "rover", "firmware": "2.1.0"}`. The camera (`cam1` firmware 2.2) answers `{"board": "camera", "firmware": "2.2.0"}`. Used to recognise the boards on the network.
 
 **`GET /startjev`**: the **Jev Auto** button on the rover's control page. It switches Jev Auto on or off.
 
