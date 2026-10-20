@@ -56,13 +56,30 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page. **Firmware 2.5.1 merged (PR #27) but not yet flashed** — flash it first, verify `/id` answers `2.5.1`, then the floor drive per the placement recipe in session 13's log.
+1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page. **Firmware 2.5.4 is flashed and verified on the hotspot** (`/id` answers `2.5.4`, all 12 `--check` items pass), so the floor drive can start; the placement recipe is in session 13's log.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. ~~Later: a free way for the camera to help Jev~~ **Built and live-tested with the real Gemini key.** Now: flash the camera with the Arduino IDE steps (they're in the leader's task notes), then run `python -m earth_station.bench all` on it, and on a pass go to milestone 8 (first real drive with vision).
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Session 15: the rover's WiFi failure was the phone blocking its MAC
+
+**What we did**
+
+1. **Chased the WiFi failure from the network side** after the rover stopped joining the phone hotspot while the laptop and camera stayed online. Ruled out, one at a time: firmware (the same failure happens with a 10-line `WiFi.begin()` sketch), credentials (the board's copy is byte-for-byte the hotspot key), security (the hotspot is WPA2/CCMP, not WPA3), the client limit (2 of 5 slots used), the board (it joined the home router at once), the hotspot channel (it joined the camera's own channel-1 access point in 2.5 s), and NVS state (an erase-all flash changed nothing).
+2. **Found the cause by changing one variable: the MAC address.** The phone hotspot accepts the laptop and the camera, but it was rejecting the rover's factory MAC. The exact same sketch, with only the STA MAC changed, joined the hotspot in under a second (`CONNECTED`, zero `INIT` lines). The failure signature (`status=6` plus a thousand `wifi:Set status to INIT` driver lines) is what the ESP32 does when the access point silently ignores its association frames.
+3. **Firmware 2.5.4** sets a fixed locally-administered STA MAC (`02:4D:52:53:01:01`) before `begin()`, with a comment explaining the block and how to undo it. The real fix is to remove the rover's factory MAC (`C8:F0:9E:B7:57:34`) from the phone's blocked-device/access-control list; after that, the three MAC lines can be deleted.
+4. **Flashed and verified live**: `/id` answers `2.5.4`; the rover is at `10.126.53.246` with mDNS `rover.local`; `/sensors/data` answered 12/12 times in 218–282 ms with `i2c_ok=1`, `i2c_recov=0` and sane pitch/roll; all 12 `earth_station --check` items pass, including a live photo description.
+5. **Vision latency side-fix**: the configured `gemini-flash-lite-latest` alias was taking 25–50 s per answer (Gemini service degradation), which made `--check` fail its photo step. The local `.env` now uses `VISION_MODEL=gemini-3.5-flash` (2–5 s answers) and `VISION_TIMEOUT_S=20`.
+
+**Things to remember**
+- If the rover ever loses WiFi again, first try another device on the same hotspot; an access point can block one MAC while every other device works. Changing the STA MAC (or unblocking it on the phone) is both the test and the fix.
+- `02:4D:52:53:01:01` is a locally-administered MAC, not the chip's factory address; the factory one is still in eFuse and comes back if the three MAC lines are removed.
+- Windows re-joined the home router automatically twice during testing, so `--check` scanned the wrong subnet. Pin the hotspot first (`netsh wlan set profileorder name=<hotspot> interface="Wi-Fi" priority=1`) and check the laptop's IP before trusting a "board not found" result.
+- The Gemini model aliases ending in `-latest` can silently point at a slow model; `python -m earth_station.describe photo.jpg` prints the real latency.
+- Flashing takes the serial port: close the Arduino IDE's Serial Monitor first.
 
 ### 2026-10-20 — Session 14: rover firmware 2.5.1 (the `/sensors/data` hiccup fix pack)
 
