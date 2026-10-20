@@ -159,16 +159,19 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `DESCRIBE_MODE` | `mock` | `mock` = no live vision: the simulator's hidden scene, or for a real photo "no camera vision, use the distance sensor". `live` = a vision AI describes each photo (needs `VISION_API_KEY`) |
 | `VISION_PROVIDER` | `anthropic` in code, `gemini` in `.env.example` | Which vision AI to use: `gemini` (free key from [aistudio.google.com](https://aistudio.google.com)) or `anthropic` (Claude, paid) |
 | `VISION_API_KEY` | empty | The key of the provider above (Gemini or Anthropic) |
-| `VISION_MODEL` | `claude-opus-5-5` | Which model describes the photos. For Gemini use `gemini-flash-lite-latest` (free-tier friendly: set `CAMERA_EVERY_MS=5000`) |
+| `VISION_MODEL` | `claude-opus-5-5` | Which model describes the photos. For Gemini use `gemini-3.5-flash` (validated on the real camera: 3–12 s per photo). Avoid the `*-lite` and `*-latest` aliases; they took 19–50 s or timed out |
 | `VISION_FOCUS` | empty | Comma-separated objects the vision AI should watch out for (e.g. `cables on the floor, stairs or drops`). Added to the photo prompt for either provider |
 | `VISION_EFFORT` | `low` | Anthropic only: how hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
-| `VISION_TIMEOUT_S` | `10` | Give up on one photo after this many seconds (the scene goes stale and the gate stops the rover) |
-| `DECIDE_EVERY_MS` | `500` | How often Jev is asked |
+| `VISION_TIMEOUT_S` | `30` | Give up on one photo after this many seconds (the scene goes stale and the gate stops the rover). Gemini 3.5 Flash takes 7–12 s |
+| `CAMERA_EVERY_MS` / `SCENE_MAX_AGE_MS` | `3000` / `20000` | How long to wait between photos and how old a description may be. The real photo period is this plus the describe time (7–12 s on Gemini 3.5 Flash) |
+| `DECIDE_EVERY_MS` | `50` | How long to wait after each Jev answer. `50` chains the 500 ms move pulses (continuous motion); `500` halves the Jev spend but makes the rover stop-start |
 | `JEV_MAX_CALLS` | `20` | Most real Jev calls in one run (pre-flight included). Then the station stops the rover and ends the run. Only counts with `JEV_MODE=live` |
 | `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
-| `MAX_SPEED` / `MOVE_MS` | `170` / `300` | Speed cap (0–255) and length of each move |
+| `MAX_SPEED` / `MOVE_MS` | `255` / `500` | Speed cap (0–255) and length of each move. Full power and the firmware's cap are needed for the 2–3 kg rover; a single pulse still barely moves, so Jev chains them |
 | `GOAL` | `explore the room safely` | Put into every message Jev reads |
 | `MISSION_CONTROL_PORT` | `8000` | Port of the mission control page, `http://127.0.0.1:<port>` |
+
+Gemini's free tier is **20 requests/day per project per model** (measured 2026-10-20). A pre-flight plus a 10-call drive can use it up; for a longer vision drive, enable billing or use `DESCRIBE_MODE=mock`.
 
 Keys live only in `.env`, which is git-ignored. Never put them in code.
 
