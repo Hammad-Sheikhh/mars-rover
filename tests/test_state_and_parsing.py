@@ -37,9 +37,27 @@ def test_state_text_contains_conclusions_not_just_numbers(settings):
     text = state_text.build(b, settings)
     assert "62 cm, clear" in text
     assert "Chair leg ahead." in text
+    assert "Open side: right." in text
+    assert "Obstacle ahead: yes." in text
     assert "cable on floor" in text
     assert "Tilt Warning" in text
     assert settings.goal in text
+
+
+def test_state_text_says_none_when_no_side_is_open(settings):
+    b = Whiteboard()
+    b.post_telemetry({"distance_cm": 20, "pitch": 0, "roll": 0, "vibration": 0.0})
+    b.post_scene(
+        {
+            "summary": "Lens covered.",
+            "obstacle_ahead": True,
+            "clear_side": "none",
+            "hazards": [],
+        }
+    )
+    text = state_text.build(b, settings)
+    assert "Open side: none (neither side is known to be open)." in text
+    assert "Obstacle ahead: yes." in text
 
 
 def test_parse_choice_accepts_known_shapes():
