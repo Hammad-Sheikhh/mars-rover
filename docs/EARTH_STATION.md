@@ -222,7 +222,7 @@ Each run writes `runs/<date>_<time>.jsonl`, one JSON object per line: every deci
 
 This is the contract between the Earth Station and the rover. `rover1/rover1.ino` (firmware 2.1) and the simulator (`earth_station/sim.py`) both follow it. Change all three together.
 
-**`GET /id`**: `{"board": "rover", "firmware": "2.1.0"}`. The camera (`cam1` firmware 2.2) answers `{"board": "camera", "firmware": "2.2.0"}`. Used to recognise the boards on the network.
+**`GET /id`**: `{"board": "rover", "firmware": "2.5.1"}`. The camera (`cam1`) answers `{"board": "camera", "firmware": "2.2.0"}`. Used to recognise the boards on the network.
 
 **`GET /startjev`**: the **Jev Auto** button on the rover's control page. It switches Jev Auto on or off.
 
@@ -235,7 +235,9 @@ This is the contract between the Earth Station and the rover. `rover1/rover1.ino
 
 * `distance_cm`: latest ultrasonic median, or `-1` if there's no echo.
 * `mode`: `"manual"`, `"autonomy"` or `"jev"`. If the field is missing, the Earth Station treats the rover as manual and never drives it.
-* `last_event`: `Nominal`, `Obstacle Avoided`, `Tilt Warning` or `Impact Detected`.
+* `last_event`: `Nominal`, `Obstacle Avoided`, `Tilt Warning` or `Impact Detected`. An event stays in the payload for only 8 seconds (rover firmware 2.5), then goes back to `Nominal` — a finished hazard no longer haunts Jev's briefs.
+* `accX`/`accY`/`accZ`: the raw gravity vector (in G) from the MPU6050, the numbers pitch/roll come from. (Firmware 2.5.)
+* `i2c_ok` / `i2c_recov` (firmware 2.5.1): `1` means the MPU6050 answered the last I2C handshake; `i2c_recov` counts how often the rover had to re-initialise the I2C bus to bring a stuck IMU back. Rising `i2c_recov` string means a wiring or power problem, not a software one.
 
 **`POST /jev/cmd`**: header `X-Token: <ROVER_CMD_TOKEN>`, body:
 

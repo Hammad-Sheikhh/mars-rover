@@ -56,7 +56,11 @@ def _open_mission_control(station: Station, port: int, browser: bool) -> Mission
 
 
 async def _amain(settings: config.Settings, *, find: bool, browser: bool = True) -> int:
-    async with httpx.AsyncClient() as client:
+    # 2.5.0: cap the pool so a stuck rover link can't stack abandoned sockets -
+    # the rover's Arduino WebServer accepts only a few connections at once.
+    async with httpx.AsyncClient(
+        limits=httpx.Limits(max_connections=4, max_keepalive_connections=2)
+    ) as client:
         if find:
             located = await _find(settings, client)
             if located is None:

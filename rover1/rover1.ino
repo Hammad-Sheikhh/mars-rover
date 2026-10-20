@@ -34,7 +34,7 @@ WebServer server(80);                   // class/object/port 80 is standard path
 #error "Add ROVER_CMD_TOKEN to rover1/secrets.h (see secrets.example.h)"
 #endif
 const char* roverCmdToken = ROVER_CMD_TOKEN;  // laptop must send this in the X-Token header
-const char* FIRMWARE_VERSION = "2.2.0";
+const char* FIRMWARE_VERSION = "2.5.1";
 const char* MDNS_NAME = "rover";              // reachable as http://rover.local on the hotspot
 const unsigned long JEV_WATCHDOG_MS = 1500;   // no command for this long -> stop
 const unsigned long JEV_MAX_MOVE_MS = 500;    // longest single move
@@ -59,7 +59,45 @@ float vibrationScore = 0;
 float lastAccX = 0, lastAccY = 0;
 const float ROLLOVER_LIMIT = 35.0;
 const float IMPACT_THRESHOLD = 0.5;
-String lastEvent = "Nominal"; 
+String lastEvent = "Nominal";
+// An event is news for a short while, then history: without this an old
+// "Tilt Warning" stayed in every telemetry payload (and in every Jev brief)
+// indefinitely, and Jev kept reading a hazard that was long over.
+const unsigned long EVENT_FRESH_MS = 8000;   // an event is reported this long
+unsigned long lastEventMs = 0;
+void markEvent(const char* name) {           // stamp when an event happens
+  lastEvent = name;
+  lastEventMs = millis();
+}
+void expireOldEvent() {                      // called every loop: expire stale events
+  if (lastEvent != "Nominal" && millis() - lastEventMs > EVENT_FRESH_MS) {
+    lastEvent = "Nominal";
+    lastEventMs = 0;
+  }
+}
+// Real orientation comes from the accelerometer (the gravity vector), NOT from
+// the library's getAngleX()/getAngleY(). Those are 99.6% integrated gyro: the
+// rotation sum sticks at fake values (e.g. -90) after wobble or handling and
+// then poisons everything - tilt vetoes, Tilt Warning events, Jev's briefs.
+// atan2 on the accelerometer is drift-free and instant; a light low-pass keeps
+// motor vibration from spiking it.
+float pitchDeg = 0.0, rollDeg = 0.0;
+bool anglesPrimed = false;
+void refreshAngles() {
+  float ax = mpu.getAccX();
+  float ay = mpu.getAccY();
+  float az = mpu.getAccZ();
+  float pitchNow = atan2(ay, az + abs(ax)) * 57.29578;    // same formula the library uses for its accelerometer angle
+  float rollNow = atan2(ax, az + abs(ay)) * -57.29578;
+  if (!anglesPrimed) {                    // first reading: start exactly on it
+    pitchDeg = pitchNow;
+    rollDeg = rollNow;
+    anglesPrimed = true;
+  } else {
+    pitchDeg = 0.7f * pitchDeg + 0.3f * pitchNow;
+    rollDeg = 0.7f * rollDeg + 0.3f * rollNow;
+  }
+}
 // ---------- LDR Pins ----------
 const int LDR_PIN = 33; // digital OUT from LDR module
 const int LDR_LED = 4; // indicator GPIO (LED is disconnected for now)
@@ -166,7 +204,8 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   }
   // NEW: Set WiFi to dual mode (AP + Station)
   WiFi.setHostname(MDNS_NAME);
-  WiFi.mode(WIFI_AP_STA);         // key word for ap + station mode 
+  WiFi.mode(WIFI_AP_STA);         // key word for ap + station mode
+  WiFi.setSleep(false);           // 2.5.0: STA modem sleep caused 8-200 ms ping jitter and TX bursts that SATURATED the web server (costs ~20-40 mA battery)
   // NEW: Connect to WiFi (station mode) for internet
   WiFi.begin(wifiSSID, wifiPass);
   Serial.print("Connecting to WiFi station...");
@@ -208,19 +247,46 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   server.begin();
   Serial.println("HTTP server started");
 }
+// ---------- loop heartbeat (2.4.1: catch the freeze) ----------
+// One letter per loop stage, rate-limited to 2 s: H after server.handleClient(),
+// M after mpu.update(), D after sampleDistance(), J after jevLoop().
+// A full BEAT line (incl. free heap) every 10 s. When the web server freezes:
+// the letters stop in order, and the MISSING letter names the hung stage.
+void beat(char stage) {
+  static const char stages[] = {'H', 'M', 'D', 'J'};
+  static unsigned long lastMs[4] = {0, 0, 0, 0};
+  for (int i = 0; i < 4; i++) {
+    if (stages[i] == stage && millis() - lastMs[i] >= 2000) {
+      lastMs[i] = millis();
+      Serial.print(stage);
+    }
+  }
+}
+unsigned long lastBeatFullMs = 0;
+void beatFull() {
+  if (millis() - lastBeatFullMs >= 10000) {
+    lastBeatFullMs = millis();
+    Serial.printf("BEAT ms=%lu heap=%lu jev=%d\n", millis(), (unsigned long)ESP.getFreeHeap(), jevEnabled ? 1 : 0);
+  }
+}
 void loop() {
   server.handleClient();
+  beat('H');
   // 1. Refresh IMU data
   mpu.update();
+  beat('M');
   sampleDistance();   // keeps distance_cm fresh for telemetry and the Jev vetoes
+  beat('D');
+  refreshSlowSensors();   // bmp + dht on a 2 s timer, so /sensors/data never blocks
 
   // 2. LDR LED logic
   int ldrState = digitalRead(LDR_PIN);
   digitalWrite(LDR_LED, (ldrState == HIGH) ? HIGH : LOW);
 
-  // 3. MPU Data Capture (For Telemetry Only)
-  float p = mpu.getAngleX();
-  float r = mpu.getAngleY();
+  // 3. MPU Data Capture (For Telemetry Only) - pitch/roll from the accelerometer
+  refreshAngles();
+  float p = pitchDeg;
+  float r = rollDeg;
   float curX = mpu.getAccX();
   float curY = mpu.getAccY();
   float curZ = mpu.getAccZ();
@@ -233,17 +299,22 @@ vibrationScore = abs(curZ - 1.0);
 lastAccX = curX; lastAccY = curY;
 
   // Detect Events for logging (Doesn't affect movement)
-  if (abs(p) > ROLLOVER_LIMIT || abs(r) > ROLLOVER_LIMIT) lastEvent = "Tilt Warning";  // abs means distance from zero
-  else if (abs(curX - lastAccX) > IMPACT_THRESHOLD) lastEvent = "Impact Detected";
+  expireOldEvent();   // a stale "Tilt Warning" must not outlive its moment
+  if (abs(p) > ROLLOVER_LIMIT || abs(r) > ROLLOVER_LIMIT) markEvent("Tilt Warning");  // abs means distance from zero
+  else if (abs(curX - lastAccX) > IMPACT_THRESHOLD) markEvent("Impact Detected");
 
   // Jev Auto: finish moves on time, watchdog, reflexes (never blocks)
-  if (jevEnabled) jevLoop();
+  if (jevEnabled) {
+    jevLoop();
+    beat('J');
+  }
+  beatFull();
 
   // 4. Autonomous behavior (Simple Ultrasonic Only)
   if (autonomousEnabled) {
     long distance = getDistance(); // main obstacle avoidance logic
     if (distance > 0 && distance < SAFE_DISTANCE_CM) {
-      lastEvent = "Obstacle Avoided";
+      markEvent("Obstacle Avoided");
       stopMotors(); 
       delay(50);
       backward(DEFAULT_SPEED); 
@@ -266,14 +337,21 @@ lastAccX = curX; lastAccY = curY;
   // Send data to Supabase periodically if connected
   // OFF by default (SUPABASE_UPLOAD 0): the blocking TLS handshake starved the
   // web server, so /sensors/data and /jev/cmd timed out mid-drive. See PR: camera fix 2.2.0.
-  if (SUPABASE_UPLOAD && WiFi.status() == WL_CONNECTED && millis() - lastSendTime >= sendIntervalMs) {
+  // 2.5.0: compiled out entirely - flipping the #define back on now requires a
+  // code change (and should carry a note that TLS handshake costs ~1-3 s frozen loop).
+#if SUPABASE_UPLOAD
+  if (WiFi.status() == WL_CONNECTED && millis() - lastSendTime >= sendIntervalMs) {
     lastSendTime = millis();
     sendDataToSupabase();
   }
+#endif
 }
 // ---------------- Web UI - Single page ----------------
-void handleRoot() {
-  String page = R"rawliteral(
+// 2.5.0: the page used to be copied into a ~12 KB heap String on EVERY page
+// load and freed after sending - that alloc/free churn fragments the heap and
+// makes mid-response send failures (truncated JSON) increasingly likely until
+// the server wedges. Served straight from flash now, zero heap copies.
+static const char PAGE[] PROGMEM = R"rawliteral(
 <!doctype html>
 <html lang="en">
 <head>
@@ -407,7 +485,7 @@ void handleRoot() {
 <body>
   <div class="container">
     <header>
-      <h1>MARS ROVER <span class="badge">V2.1</span></h1>
+      <h1>MARS ROVER <span class="badge">V2.5</span></h1>
     </header>
 
     <div class="card">
@@ -542,7 +620,8 @@ void handleRoot() {
 </body>
 </html>
 )rawliteral";
-  server.send(200, "text/html", page);
+void handleRoot() {
+  server.send_P(200, "text/html", PAGE);
 }
 void handleStartNavigation() {
   if (jevEnabled) setJevMode(false);   // any manual button leaves Jev Auto
@@ -565,32 +644,70 @@ void handleStartStopRover() {
   if (!roverMoving) stopMotors();
   server.send(200, "text/plain", roverMoving ? "Rover moving forward" : "Rover stopped");
 }
-void handleSensorsData() {  // it actualy sends the readings in the design
-  int ldrState = digitalRead(LDR_PIN);
-  float pressureHpa = NAN;
-  float relAltitudeCm = NAN;
-  if (bmpFound) {
-    pressureHpa = bmp.readPressure() / 100.0;
-    float absAltM = bmp.readAltitude(101325.0);
-    relAltitudeCm = (absAltM - baselineAltitudeM) * 100.0;
+// ---------- cached slow sensors (2.5.0) ----------
+// The old /sensors/data did blocking I2C (bmp) + a bit-banged DHT read + ~12
+// chained String allocations on EVERY call, at 5 calls/s - a long busy window
+// that collided with the laptop's pollers and starved the single-threaded
+// WebServer. Now loop() refreshes these every 2 s; the handler only formats.
+float cachedPressureHpa = NAN, cachedRelAltitudeCm = NAN, cachedTempC = NAN, cachedHumidityPct = NAN;
+bool pressureValid = false, tempValid = false;
+unsigned long lastSlowSensorMs = 0;
+const unsigned long SLOW_SENSOR_EVERY_MS = 2000;
+// 2.5.1: I2C diagnostics - the ground crew needs to SEE the bus state and the
+// raw gravity vector, not just pitch/roll conclusions. i2cMpuOk = the last
+// handshake with the MPU6050 answered; i2cRecoveries counts auto re-inits.
+bool i2cMpuOk = false;
+int i2cRecoveries = 0;
+const char* fmtPressure() { static char b[16]; snprintf(b, sizeof(b), "%.2f", cachedPressureHpa); return b; }
+const char* fmtAltitude() { static char b[16]; snprintf(b, sizeof(b), "%.2f", cachedRelAltitudeCm); return b; }
+const char* fmtTemp() { static char b[16]; snprintf(b, sizeof(b), "%.1f", cachedTempC); return b; }
+const char* fmtHumidity() { static char b[16]; snprintf(b, sizeof(b), "%.0f", cachedHumidityPct); return b; }
+void refreshSlowSensors() {
+  if (millis() - lastSlowSensorMs < SLOW_SENSOR_EVERY_MS) return;
+  lastSlowSensorMs = millis();
+  // I2C health probe + one auto-recovery: if the MPU stops answering, re-init
+  // the Wire stub and try again (a bus lock after a motor-glitch recovers here
+  // instead of leaving angles frozen and every move refused as tilt).
+  Wire.beginTransmission(0x68);
+  i2cMpuOk = (Wire.endTransmission() == 0);
+  if (!i2cMpuOk) {
+    Wire.end();
+    delay(2);
+    Wire.begin(25, 26);
+    Wire.beginTransmission(0x68);
+    i2cMpuOk = (Wire.endTransmission() == 0);
+    if (i2cMpuOk) i2cRecoveries++;
   }
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
-  String payload = "{";
-  payload += "\"ldrState\":" + String(ldrState);
-  payload += ",\"pressure\":" + (bmpFound ? String(pressureHpa, 2) : "null"); // 2 decimal places 
-  payload += ",\"altitude\":" + (bmpFound ? String(relAltitudeCm, 2) : "null");
-  payload += ",\"temperature\":" + (isnan(temperature) ? "null" : String(temperature, 1)); // isnan() is a special shorthand in programming that stands for "is Not a Number."
-  payload += ",\"humidity\":" + (isnan(humidity) ? "null" : String(humidity, 0));
-  payload += ",\"pitch\":" + String(mpu.getAngleX(), 1);
-  payload += ",\"roll\":" + String(mpu.getAngleY(), 1);
-  payload += ",\"vibration\":" + String(vibrationScore, 3);
-  payload += ",\"autonomous\":" + String(autonomousEnabled ? 1 : 0);
-  payload += ",\"distance_cm\":" + String(lastDistanceCm);
-  payload += ",\"mode\":\"" + roverMode() + "\"";
-  payload += ",\"last_event\":\"" + lastEvent + "\"";
-  payload += "}";
-  server.send(200, "application/json", payload);
+  if (bmpFound) {
+    cachedPressureHpa = bmp.readPressure() / 100.0;
+    cachedRelAltitudeCm = (bmp.readAltitude(101325.0) - baselineAltitudeM) * 100.0;
+    pressureValid = true;
+  }
+  float t = dht.readTemperature();
+  cachedTempC = t;
+  cachedHumidityPct = dht.readHumidity();
+  tempValid = !isnan(t) && !isnan(cachedHumidityPct);
+}
+void handleSensorsData() {  // it actualy sends the readings in the design
+  char buf[448];
+  snprintf(buf, sizeof(buf),
+    "{\"ldrState\":%d,\"pressure\":%s,\"altitude\":%s,\"temperature\":%s,\"humidity\":%s,"
+    "\"pitch\":%.1f,\"roll\":%.1f,\"accX\":%.3f,\"accY\":%.3f,\"accZ\":%.3f,"
+    "\"i2c_ok\":%d,\"i2c_recov\":%d,\"vibration\":%.3f,\"autonomous\":%d,"
+    "\"distance_cm\":%ld,\"mode\":\"%s\",\"last_event\":\"%s\"}",
+    digitalRead(LDR_PIN),
+    pressureValid ? fmtPressure() : "null",
+    pressureValid ? fmtAltitude() : "null",
+    tempValid ? fmtTemp() : "null",
+    tempValid ? fmtHumidity() : "null",
+    pitchDeg, rollDeg,
+    mpu.getAccX(), mpu.getAccY(), mpu.getAccZ(),
+    i2cMpuOk ? 1 : 0, i2cRecoveries,
+    vibrationScore,
+    autonomousEnabled ? 1 : 0,
+    lastDistanceCm,
+    roverMode().c_str(), lastEvent.c_str());
+  server.send(200, "application/json", buf);
 }
 void notFound() { server.send(404, "text/plain", "Not found"); }
 // ---------------- Motor helpers ----------------
@@ -624,7 +741,7 @@ long singleUltrasonicReading() {
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-  unsigned long duration = pulseIn(ECHO_PIN, HIGH, 30000UL);
+  unsigned long duration = pulseIn(ECHO_PIN, HIGH, 12000UL);  // 12 ms cap (~2 m); the old 30 ms block starved the web server
   if (duration == 0) return -1;
   float distCm = (duration * 0.034f) / 2.0f; //speed of souund in cm/ms 0.034
   return (long)(distCm + 0.5f);
@@ -671,8 +788,8 @@ void sendDataToSupabase() {
   payload += ",\"ldr_state\":\"" + String(ldrState == 1 ? "Night" : "Day") + "\"";
   payload += ",\"pressure\":" + (bmpFound ? String(pressureHpa, 2) : "null");
   payload += ",\"altitude\":" + (bmpFound ? String(relAltitudeCm, 2) : "null");
-  payload += ",\"pitch\":" + String(mpu.getAngleX(), 1);
-  payload += ",\"roll\":" + String(mpu.getAngleY(), 1);
+  payload += ",\"pitch\":" + String(pitchDeg, 1);
+  payload += ",\"roll\":" + String(rollDeg, 1);
   payload += ",\"vibration\":" + String(vibrationScore, 3);
   payload += ",\"last_event\":\"" + lastEvent + "\"";
   payload += "}";
@@ -715,7 +832,7 @@ String roverMode() {
   return "manual";
 }
 bool isTilted() {
-  return abs(mpu.getAngleX()) > ROLLOVER_LIMIT || abs(mpu.getAngleY()) > ROLLOVER_LIMIT;
+  return abs(pitchDeg) > ROLLOVER_LIMIT || abs(rollDeg) > ROLLOVER_LIMIT;
 }
 void stopJevMove() {
   stopMotors();
@@ -754,12 +871,12 @@ void jevLoop() {
     return;
   }
   if (jevAction == "forward" && lastDistanceCm > 0 && lastDistanceCm < JEV_MIN_FORWARD_CM) {
-    lastEvent = "Obstacle Avoided";                  // reflex: something appeared ahead
+    markEvent("Obstacle Avoided");                  // reflex: something appeared ahead
     stopJevMove();
     return;
   }
   if (isTilted()) {
-    lastEvent = "Tilt Warning";
+    markEvent("Tilt Warning");
     stopJevMove();
   }
 }
@@ -841,13 +958,13 @@ void handleJevCmd() {
     return;
   }
   if (isTilted()) {                                      // veto: tipping over
-    lastEvent = "Tilt Warning";
+    markEvent("Tilt Warning");
     stopJevMove();
     sendJevReply(seqText, false, "refused", "tilt");
     return;
   }
   if (action == "forward" && lastDistanceCm > 0 && lastDistanceCm < JEV_MIN_FORWARD_CM) {
-    lastEvent = "Obstacle Avoided";                      // veto: too close ahead
+    markEvent("Obstacle Avoided");                       // veto: too close ahead
     stopJevMove();
     sendJevReply(seqText, false, "refused", "obstacle_too_close");
     return;
