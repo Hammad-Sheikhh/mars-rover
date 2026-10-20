@@ -34,7 +34,7 @@ WebServer server(80);                   // class/object/port 80 is standard path
 #error "Add ROVER_CMD_TOKEN to rover1/secrets.h (see secrets.example.h)"
 #endif
 const char* roverCmdToken = ROVER_CMD_TOKEN;  // laptop must send this in the X-Token header
-const char* FIRMWARE_VERSION = "2.5.2";
+const char* FIRMWARE_VERSION = "2.5.3";
 const char* MDNS_NAME = "rover";              // reachable as http://rover.local on the hotspot
 const unsigned long JEV_WATCHDOG_MS = 1500;   // no command for this long -> stop
 const unsigned long JEV_MAX_MOVE_MS = 500;    // longest single move
@@ -158,6 +158,7 @@ String roverMode();
 void setup() {
   Serial.begin(115200);
   delay(100);
+  Serial.printf("\n=== Rover firmware %s ===\n", FIRMWARE_VERSION);   // 2.5.3: first line tells you WHICH sketch is running
   // Motor pins
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
@@ -203,13 +204,14 @@ The "Correction": This average is saved as the Offset. From now on, every time t
     Serial.println("BMP280 not found (0x76/0x77).");
   }
   // NEW: Set WiFi to dual mode (AP + Station)
-  WiFi.setHostname(MDNS_NAME);
-  WiFi.setSleep(false);           // 2.5.0: STA modem sleep caused 8-200 ms ping jitter and TX bursts that SATURATED the web server (costs ~20-40 mA battery)
-  // 2.5.2: join the hotspot ALONE first (WIFI_STA), AP comes up only after a
-  // clean station connect. Running our own AP at the same time confuses some
-  // phone hotspots into a "state: run -> init" reconnect loop at boot.
-  WiFi.disconnect(true);          // clean slate: forget any half-state from before
-  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(MDNS_NAME);    // must be set BEFORE mode()/begin() (ESP32 docs)
+  // 2.5.3: this is the exact sequence a standalone radio test proved on this
+  // board: mode -> disconnect() -> begin. Firmware 2.5.1/2.5.2 called
+  // setSleep(false) and disconnect(true) BEFORE the radio was started, which
+  // put the ESP-IDF driver into a "Set status to INIT" reset loop: the radio
+  // never joined the hotspot and never even raised its own AP.
+  WiFi.mode(WIFI_STA);            // join the hotspot alone; the AP comes up afterwards
+  WiFi.disconnect();              // no wifioff - clear any half-state, keep the driver running
   // NEW: Connect to WiFi (station mode) for internet
   WiFi.begin(wifiSSID, wifiPass);
   Serial.print("Connecting to WiFi station...");
@@ -222,7 +224,8 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   }
   if (WiFi.status() == WL_CONNECTED) {    // checks if esp is connected to wifi
     Serial.println("\nWiFi station connected. IP: " + WiFi.localIP().toString());  // print ip
-    WiFi.mode(WIFI_AP_STA);               // 2.5.2: station is stable - now bring our own AP up beside it
+    WiFi.setSleep(false);                 // 2.5.0: modem sleep made ping jitter. Valid only AFTER start - see note above
+    WiFi.mode(WIFI_AP_STA);               // station is stable - now bring our own AP up beside it
 #if !SUPABASE_UPLOAD
     Serial.println("Supabase uploads are off (SUPABASE_UPLOAD 0): the rover only serves control + Jev.");
 #endif
@@ -233,11 +236,20 @@ The "Correction": This average is saved as the Offset. From now on, every time t
       Serial.println("mDNS failed - use the IP above");
     }
   } else {
-    // 2.5.2: one clean-slate retry before giving up (a first join can fail on a
-    // busy channel; the disconnect+begin cycle below has cleared it before)
-    Serial.printf("\nFirst join failed (status %d). One clean retry...\n", WiFi.status());
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_STA);
+    // 2.5.3: say WHY. A scan shows whether the hotspot is even visible to the
+    // station radio (it is, if a line ends in MATCH), or whether the join was
+    // refused (wrong password / client limit).
+    Serial.printf("\nFirst join failed (status %d). Scanning what the radio can see...\n", WiFi.status());
+    int found = WiFi.scanNetworks();
+    for (int i = 0; i < found; i++) {
+      bool match = WiFi.SSID(i) == wifiSSID;
+      Serial.printf("  %-24s ch=%2d rssi=%3d%s\n", WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i),
+                    match ? "  <-- MATCH" : "");
+    }
+    WiFi.scanDelete();
+    // One retry, same proven-clean sequence as above (no disconnect(true)!)
+    Serial.println("One clean retry...");
+    WiFi.disconnect();
     WiFi.begin(wifiSSID, wifiPass);
     int retry = 0;
     while (WiFi.status() != WL_CONNECTED && retry < 20) {   // another 10 s
@@ -247,6 +259,7 @@ The "Correction": This average is saved as the Offset. From now on, every time t
     }
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("\nWiFi station connected on retry. IP: " + WiFi.localIP().toString());
+      WiFi.setSleep(false);
       WiFi.mode(WIFI_AP_STA);
       if (MDNS.begin(MDNS_NAME)) {
         MDNS.addService("http", "tcp", 80);
