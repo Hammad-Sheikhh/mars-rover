@@ -19,6 +19,7 @@ secrets.h.bak
 # Earth Station (Python)
 .venv/
 runs/
+run_photos/
 __pycache__/
 *.egg-info/
 .pytest_cache/
