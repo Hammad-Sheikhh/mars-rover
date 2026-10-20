@@ -134,6 +134,33 @@ def test_scene_probes_are_scorable_and_recorded(live, monkeypatch):
     assert all(e["scene"] == SCENE for e in recorded)
 
 
+def test_one_probe_scores_one_probe_and_never_waits_for_input(live):
+    """--probe N: a remote caller fires one probe themselves; no Enter at all."""
+    b = Bench(live, fake_describe(), echo=False)
+    result = asyncio.run(b.one_probe(FakeCamera(), 1))
+    recorded = [e for e in b.events if e["kind"] == "bench_probe"]
+    assert result == {"name": "obstacle 1 m ahead", "ok": True, "soft": False, "score": "obstacle"}
+    assert len(recorded) == 1 and recorded[0]["ok"] is True
+
+
+def test_one_probe_rejects_an_out_of_range_number(live):
+    b = Bench(live, fake_describe(), echo=False)
+    with pytest.raises(BenchError, match="out of range"):
+        asyncio.run(b.one_probe(FakeCamera(), 0))
+    with pytest.raises(BenchError, match="out of range"):
+        asyncio.run(b.one_probe(FakeCamera(), 99))
+
+
+def test_one_probe_counts_a_failed_capture_as_a_miss(live):
+    b = Bench(
+        live, fake_describe(answers=[DescribeError("vision AI rate limit reached")]), echo=False
+    )
+    result = asyncio.run(b.one_probe(FakeCamera(), 1))
+    assert result["ok"] is False
+    recorded = [e for e in b.events if e["kind"] == "bench_probe"]
+    assert recorded and "rate limit" in recorded[0]["message"]
+
+
 # ------------------------------- burst ---------------------------------------
 
 
