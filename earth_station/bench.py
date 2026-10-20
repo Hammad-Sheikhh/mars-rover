@@ -444,9 +444,13 @@ def report(bench: Bench, data: dict[str, Any]) -> str:
     # Soft checks are shown but never decide the overall verdict.
     scored = [ok for text, ok, _ in rows if "(soft check" not in text]
     passed = bool(scored) and all(scored)
-    lines.append(
-        f"  => {paint('ALL THRESHOLDS PASS', 'green') if passed else 'SEE THE FAIL ROWS ABOVE'}"
-    )
+    headline = "ALL THRESHOLDS PASS"
+    color = "green"
+    if not scored:
+        headline, color = "NO THRESHOLDS EVALUATED - run smoke, stamina or scene", "yellow"
+    elif not passed:
+        headline, color = "SEE THE FAIL ROWS ABOVE", "red"
+    lines.append(f"  => {paint(headline, color)}")
     return "\n".join(lines)
 
 

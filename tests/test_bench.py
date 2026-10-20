@@ -248,6 +248,15 @@ def test_verdict_flags_failures_and_mock_mode(live):
     assert "ALL THRESHOLDS PASS" not in text
 
 
+def test_report_says_when_nothing_was_scored(live):
+    """A burst-only run (or any run without rows) must not claim a verdict."""
+    b = Bench(replace(live, describe_mode="mock"), fake_describe(), echo=False)
+    text = report(b, {"real_vision": True, "burst": {"first_429": None}})
+    assert "NO THRESHOLDS EVALUATED" in text
+    assert "ALL THRESHOLDS PASS" not in text
+    assert "FAIL" not in text
+
+
 def test_run_raises_when_the_camera_is_not_found(settings, monkeypatch, tmp_path):
     from earth_station import bench as bench_module
     from earth_station.finder import Found
