@@ -56,7 +56,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page.
+1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page. **Firmware 2.5.1 merged (PR #27) but not yet flashed** — flash it first, verify `/id` answers `2.5.1`, then the floor drive per the placement recipe in session 13's log.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. ~~Later: a free way for the camera to help Jev~~ **Built and live-tested with the real Gemini key.** Now: flash the camera with the Arduino IDE steps (they're in the leader's task notes), then run `python -m earth_station.bench all` on it, and on a pass go to milestone 8 (first real drive with vision).
 
@@ -64,6 +64,26 @@ The full build order is in `SPEC.md` section 6.
 
 ## Session log
 
+### 2026-10-20 — Session 14: rover firmware 2.5.1 (the `/sensors/data` hiccup fix pack)
+
+**What we did**
+
+1. **Resumed the half-finished firmware work the last session left in the working tree** (uncommitted `rover1/rover1.ino` + a small `earth_station/__main__.py` change). It targets the session-13 watch item: `/sensors/data` hiccuped every ~20–25 s even after the Supabase uploads were switched off in 2.2.0.
+2. **What firmware 2.5.1 changes (all slow/blocking work moved out of the HTTP handlers):**
+   - The BMP280 and DHT11 (blocking I2C + bit-banged DHT) are read on a 2 s timer inside `loop()`; `/sensors/data` only formats a cached snapshot into a fixed-size buffer — the ~12 chained `String` allocations per call are gone.
+   - The ultrasonic `pulseIn` block is capped at 12 ms (~2 m) instead of 30 ms.
+   - Wi-Fi modem sleep is off — its TX bursts were saturating the single-threaded WebServer.
+   - The 12 KB control page is served from flash (`send_P`), not copied to the heap on every page load.
+   - The Supabase path is compiled out entirely (coming back now needs a code change, not a constant flip).
+   - **Diagnostics to catch the next freeze live:** the Serial heartbeat prints `H`/`M`/`D`/`J` (one per loop stage, rate-limited) plus a full `BEAT` line with free heap every 10 s — when the server hangs, the missing letter names the stage. `/sensors/data` now also reports `accX/accY/accZ`, `i2c_ok` and `i2c_recov` (how often the bus had to be re-initialised).
+   - **Pitch/roll come from the accelerometer (`atan2`)** instead of the library's gyro-integrated angles, which could stick at fake values after handling and poison the tilt vetoes. `last_event` now expires back to `Nominal` after 8 s instead of haunting every Jev brief forever.
+3. **Earth Station side:** the httpx connection pool is capped at 4 connections / 2 keepalive (the rover's Arduino WebServer accepts only a few clients at once), so a stuck rover link can't stack abandoned sockets mid-drive.
+4. **Reviewed, tested and merged:** fixed an unused-variable nit and updated the page badge (V2.1 → V2.5), updated the CHANGELOG and the protocol doc (new payload fields + the 8 s event expiry), 124 tests pass, ruff clean. **All 6 CI checks green, including "Compile rover1". Merged as PR #27.**
+5. **The rover needs one re-flash** (currently on 2.2.0; `/id` must answer `{"board":"rover","firmware":"2.5.1"}` after). Both boards were powered off during this session, so the flash + hardware verification is still on the leader.
+6. `rover1_2.2.0_TEST/` on the laptop is the leader's local copy of the 2.2.0 code currently on the rover — kept untracked as a rollback copy; the new version flashes from `rover1/rover1.ino` itself.
+
+**Things to remember**
+- If `/sensors/data` ever freezes again, the rover's Serial heartbeat tells you *where* the loop hung (the missing letter), and `i2c_recov` rising means a wiring/power problem, not software.
 ### 2026-10-20 — Session 13: the first live-Jev drive (Milestone 8, part 1 — bench)
 
 **What we did**
