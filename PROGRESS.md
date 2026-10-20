@@ -16,7 +16,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover (ESP32): driving, sensors, own WiFi control page | ✅ Works |
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
-| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. Full AI drive = Milestone 8 |
+| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **First live-Jev drive done 20 Oct (Milestone 8, part 1 — on the bench, wheels off the ground). Floor drive left** |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
@@ -56,13 +56,29 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. **Milestone 8 — the first real drive.** First a short live-Jev run on the simulator (`python -m earth_station --sim --live-jev`, `JEV_MAX_CALLS=10`) so we can watch the AI's choices safely, then the real rover on the floor in an open area with a person next to it.
+1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. ~~Later: a free way for the camera to help Jev~~ **Built and live-tested with the real Gemini key.** Now: flash the camera with the Arduino IDE steps (they're in the leader's task notes), then run `python -m earth_station.bench all` on it, and on a pass go to milestone 8 (first real drive with vision).
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Session 13: the first live-Jev drive (Milestone 8, part 1 — bench)
+
+**What we did**
+
+1. **The first launch failed in pre-flight — and the failure was a real hardware bug.** `--check` passed 12/12 seconds earlier, but the pre-flight probe of `rover /sensors/data` timed out. Direct probes showed the endpoint answering in 204–217 ms normally but 907–1,453 ms regularly: the rover's every-5-second `sendDataToSupabase()` upload — its blocking TLS handshake starves the web server — the *exact* camera bug fixed in firmware 2.2.0 (PR #23). The camera got the fix; the rover never did.
+2. **Rover firmware 2.2.0 (PR #26, all 6 CI checks green, merged):** `SUPABASE_UPLOAD` off by default (mirroring `cam1.ino`), a boot Serial line announcing it, `FIRMWARE_VERSION` bumped to 2.2.0. The leader flashed the rover in the Arduino IDE (COM3), and `/id` answered `{"board":"rover","firmware":"2.2.0"}`. Post-flash latency probes: **88–158 ms steady** (one 822 ms cold first connection). All 12 `--check` checks OK.
+3. **Learned (again) how the station starts: it waits for a human.** The run prints `waiting for Jev Auto (press it on the rover's AP page)` and the mission-control Jev panel stays empty until the rover's mode actually becomes `jev`. Pressing the Jev Auto button on the rover's own control page is intended; this session the operator pressed it for the server via `GET http://<rover>/startjev` (answers `Jev Auto ON`). That empty panel is *not* a station fault — nothing moves until a person says go.
+4. **The first live drive: 10 real Jev decisions on the real rover, 10 sent, 0 refused.** Jev chose `turn_left` on all scored turns — consistent with every scene description ("cardboard box ~0.5 m ahead, left side open/clear"). The safety gate overruled Jev twice (confidence 0.59 and 0.49, under `min_confidence` 0.6) and sent `stop` instead — the gate is genuinely independent of the AI.
+5. **The human controls worked live:** STOP on mission control stopped the rover and paused Jev mid-run; Resume restarted it. The spending guard ended the run by itself at `JEV_MAX_CALLS=10` (set via the environment for this run, not edited into `.env`), sent a final stop and printed the budget: **5,228 tokens in / 759 out** (a few cents).
+6. **Watch items:** `/sensors/data` still hiccuped about every 20–25 s (5 times) with the station printing `rover: /sensors/data` then `recovered` — recovery works, cause unknown (Supabase upload is off now). Vision distance estimates wobble 0.3–1 m for the same box — known expectation; the ultrasonic sensor (and its 20 cm veto) remains the distance authority. The box probe confirmed the ~0.5 m fixed-focus limit: descriptions stayed judgeable at 0.5–1 m.
+
+**Things to remember**
+- The station **waits for Jev Auto to be switched on by a person** (the rover page button, or `GET /startjev`). No moves are sent before that — an empty Jev panel while `jev` link says "ok" means "waiting", not broken.
+- A run's spending cap can be set per-run with the `JEV_MAX_CALLS` environment variable (Windows PowerShell: `$env:JEV_MAX_CALLS = "10"` before the command) without touching `.env`.
+- Python's console output is buffered when watched from another process: a running station may look silent even while it works; read mission control's `/state` JSON to see live truth.
 
 ### 2026-10-20 — Session 12: the camera's eyes go free (Gemini vision)
 
