@@ -1,6 +1,7 @@
 
 #include <Wire.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <WebServer.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
@@ -34,7 +35,7 @@ WebServer server(80);                   // class/object/port 80 is standard path
 #error "Add ROVER_CMD_TOKEN to rover1/secrets.h (see secrets.example.h)"
 #endif
 const char* roverCmdToken = ROVER_CMD_TOKEN;  // laptop must send this in the X-Token header
-const char* FIRMWARE_VERSION = "2.5.3";
+const char* FIRMWARE_VERSION = "2.5.4";
 const char* MDNS_NAME = "rover";              // reachable as http://rover.local on the hotspot
 const unsigned long JEV_WATCHDOG_MS = 1500;   // no command for this long -> stop
 const unsigned long JEV_MAX_MOVE_MS = 500;    // longest single move
@@ -211,6 +212,15 @@ The "Correction": This average is saved as the Offset. From now on, every time t
   // put the ESP-IDF driver into a "Set status to INIT" reset loop: the radio
   // never joined the hotspot and never even raised its own AP.
   WiFi.mode(WIFI_STA);            // join the hotspot alone; the AP comes up afterwards
+  // 2.5.4: the phone hotspot has this board's factory STA MAC (C8:F0:9E:B7:57:34)
+  // blocked. Proved on 20 Oct: the identical sketch joins the hotspot in under
+  // a second with any other MAC, while the factory MAC gets status 6 + a
+  // "Set status to INIT" storm. Use a fixed locally-administered MAC until the
+  // block is cleared on the phone. set_mac needs the STA interface up but not
+  // connected, so this must stay after mode() and before begin().
+  delay(200);
+  uint8_t staMac[6] = {0x02, 0x4D, 0x52, 0x53, 0x01, 0x01};
+  esp_wifi_set_mac(WIFI_IF_STA, staMac);
   WiFi.disconnect();              // no wifioff - clear any half-state, keep the driver running
   // NEW: Connect to WiFi (station mode) for internet
   WiFi.begin(wifiSSID, wifiPass);
