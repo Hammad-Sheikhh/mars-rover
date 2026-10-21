@@ -58,7 +58,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct, including the 30-call and 200-call runs.** The 200-call run made 199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out. ~~Milestone 9 — vision cost control.~~ **Built 21 Oct** on `feat/station-vision-budget` (stacked on PR #32): reuse one description, refresh only when needed, cap at 6 per run, stop cleanly after 60 s without vision. **Next: merge PR #32, then the milestone-9 PR, then run a real 200-call drive with the new budget and review the log.** No board flash is needed (Python-only).
+1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct, including the 30-call and 200-call runs.** The 200-call run made 199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out. ~~Milestone 9 — vision cost control.~~ **Built 21 Oct** on `feat/station-vision-budget` (PR #33, stacked on PR #32): reuse one description, refresh only when needed, cap at 6 per run, stop cleanly after 60 s without vision. **Next: merge PR #32, then PR #33, then run a real 200-call drive with the new budget and review the log.** No board flash is needed (Python-only).
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. ~~Later: a free way for the camera to help Jev~~ **Built, live-tested, and mounted on the rover.** The free tier is **20 requests/day per project per model**; the 200-call run used ~13–15 descriptions and exhausted it. The next attempt then hung waiting for vision. Milestone 9 makes vision cheap and bounded. Options remain billing, a new project/key, later a local model, or `DESCRIBE_MODE=mock` for sensor-only tests.
 4. **When firmware changes next, flash each board separately** (`rover1`, then `cam1`). The current boards are rover **2.5.5** and camera **2.2.0**; no flash was done in the last sessions, and the vision work does not need one.
@@ -71,7 +71,7 @@ The full build order is in `SPEC.md` section 6.
 
 **What we did**
 
-1. **Built milestone 9** on `feat/station-vision-budget`, stacked on `fix/station-vision-resilience` (PR #32) because the resilience work is its base.
+1. **Built milestone 9** on `feat/station-vision-budget` (PR #33), stacked on `fix/station-vision-resilience` (PR #32) because the resilience work is its base.
 2. **One description now serves many decisions.** New `earth_station/vision_policy.py` decides when a photo is worth another call: no description yet, the rover moved `VISION_REFRESH_MOVES` (14) steps, the description is `VISION_REFRESH_MS` (12 s) old, something within `VISION_CLOSE_CM` (60 cm) got 20 cm closer, or Jev was unsure. A turn counts as 6 steps, because it changes what the camera sees.
 3. **A hard budget and a clean stop.** Every live attempt counts against `VISION_MAX_CALLS` (default 6), including the pre-flight photo and failed/rate-limited attempts, because those may still use quota. When the budget is spent the station keeps driving on the last description; if that gets stale it stops the rover and ends the run. The same clean stop happens after `VISION_LOST_STOP_S` (60 s) without a successful description — no more waiting forever on a 429.
 4. **The safety gate now only vetoes forward on an old view** (`SCENE_MAX_AGE_MS` 20 s, `SCENE_MAX_MOVES` 24). Turns and reverse are still allowed by the gate; the station also holds Jev calls while the view is stale, so it never pays for an answer it may have to throw away. This fixed the session-18 hang.
@@ -88,7 +88,7 @@ The full build order is in `SPEC.md` section 6.
 - **If the distance stays "no reading" with a wall 30–50 cm ahead, check the sensor.** TRIG is GPIO 32, ECHO is GPIO 35, and the module needs 5 V and a shared ground. A single missed echo is normal; a permanent one is wiring or a dead module.
 - **When the distance is unknown, the rover's 20 cm forward veto cannot fire** (`lastDistanceCm > 0` guard). The station's gate and the camera are then the only forward guard, which is exactly why the gate stopping at 60% confidence is healthy.
 - **The blank distance and the 60% gate stops are related but not a fault.** Jev is less sure when it has no distance reading; 0.58/0.59 is just under the 0.60 floor, so the gate stops. That is the system refusing to drive on a guess.
-- **PR #32 must merge before the milestone-9 PR.** The milestone-9 branch is stacked on it; merging #32 first keeps the diff honest.
+- **PR #32 must merge before PR #33 (milestone 9).** The milestone-9 branch is stacked on it; merging #32 first keeps the diff honest.
 - **The next real run is the acceptance test:** 200 Jev calls with `DESCRIBE_MODE=live`, expect ≤6 live descriptions, and confirm the run ends cleanly if the quota is already gone.
 
 ### 2026-10-21 — Session 18: the 200-call run and the vision bill
