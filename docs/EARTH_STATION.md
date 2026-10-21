@@ -173,7 +173,10 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `SCENE_MAX_MOVES` | `24` | Hard limit: refuse to drive forward after this many movement steps on one description (a turn counts as 6) |
 | `DECIDE_EVERY_MS` | `50` | How long to wait after each Jev answer. `50` chains the 500 ms move pulses (continuous motion); `500` halves the Jev spend but makes the rover stop-start |
 | `JEV_MAX_CALLS` | `20` | Most real Jev calls in one run (pre-flight included). Then the station stops the rover and ends the run. Only counts with `JEV_MODE=live` |
-| `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
+| `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` — except `reverse` when something is closer than `SAFE_DISTANCE_CM` (backing off only adds clearance) |
+| `SAFE_DISTANCE_CM` | `40` (45 in `.env.example` after 22 Oct) | Forward is refused below this distance. A negative `distance_cm` means "no echo within ~2 m", which counts as clear |
+| `TELEMETRY_EVERY_MS` | `1000` (code default `200`) | How often the rover is polled. Keep it at 1000 until firmware 2.6.0: ~4 requests/s hung the rover's web server on 22 Oct |
+| `TELEMETRY_MAX_AGE_MS` | `500` (2500 in `.env`) | Older than this means `stop`. Must sit well above `TELEMETRY_EVERY_MS`, or every other decision trips it |
 | `MAX_SPEED` / `MOVE_MS` | `255` / `500` | Speed cap (0–255) and length of each move. Full power and the firmware's cap are needed for the 2–3 kg rover; a single pulse still barely moves, so Jev chains them |
 | `GOAL` | `explore the room safely` | Put into every message Jev reads |
 | `MISSION_CONTROL_PORT` | `8000` | Port of the mission control page, `http://127.0.0.1:<port>` |
@@ -228,6 +231,14 @@ Every live attempt counts against `VISION_MAX_CALLS`, including the pre-flight p
 
 Mission control shows `Vision calls: X used, Y left of Z` and warns when the budget is spent or the run gives up. With `DESCRIBE_MODE=mock` it shows `off (Jev drives on the sensors only)`.
 
+The prompt tells the vision AI what the rover can physically do: about 15 cm wide and 20 cm tall, a gap of ~25 cm or wider is passable, and floor you can see under or around an object means the way is open. Without that, "blocked within 1 m" turned every passable gap into a wall (22 Oct: a bed frame with a clear gap stopped the rover for a whole run).
+
+### What Jev is told
+
+`state_text.py` turns the readings into short conclusions, because Jev is weak at arithmetic: the goal, the distance in words ("62 cm, clear (safe distance is 40 cm)"), the orientation ("level (pitch 3 deg)"), the terrain, the camera description with its open side and hazards, and the previous move.
+
+Only conclusions that are true right now are passed on. The firmware keeps an event for 8 s, so one wheel bump used to be reported as `Recent event: Tilt Warning` long after the rover was level again — on 22 Oct that reached Jev on **164 of 171** decisions, and it hedged (`forward 0.50 / stop 0.33`) until the gate stopped half the forwards. A tilt warning is now passed on only when the orientation line also says tilted; otherwise Jev reads "a bump spiked the tilt sensor while driving; the rover is level again now".
+
 ### Safety gate rules
 
 The rules, in order:
@@ -235,13 +246,27 @@ The rules, in order:
 1. Only drive when the rover reports `mode: "jev"`. Otherwise send nothing.
 2. Telemetry older than `TELEMETRY_MAX_AGE_MS` means `stop`.
 3. **Forward** with a description older than `SCENE_MAX_AGE_MS`, or more than `SCENE_MAX_MOVES` steps since the photo, means `stop` (`camera description too old` / `camera view is out of date`). Turns and reverse are still allowed at the gate. While the view is stale the station also stops asking Jev, so the rover waits rather than drives blind.
-4. Jev under `MIN_CONFIDENCE` means `stop`.
-5. Jev chooses `forward` but itself says the path is blocked: `stop`.
-6. Jev chooses `stop`: the rover stops (approved).
-7. Speed is capped at `MAX_SPEED`, and each move lasts `MOVE_MS` (max 500).
-8. Any error (Jev, camera or rover) means `stop`.
+4. **Forward inside `SAFE_DISTANCE_CM`** means `stop` (`only 36 cm ahead (safe distance is 45 cm)`). The rover's own veto is 20 cm, which is too late: on 22 Oct it pushed into a stool twice at 18–36 cm. A negative distance ("no echo within ~2 m") stays drivable.
+5. Jev under `MIN_CONFIDENCE` means `stop` — **except `reverse` while something is closer than `SAFE_DISTANCE_CM`**, which is approved (`reversing away from an obstacle`). Backing off only adds clearance, and Jev's five-way answer often splits reverse from stop (0.48 at 18 cm left the rover pinned).
+6. Jev chooses `forward` but itself says the path is blocked: `stop`.
+7. Jev chooses `stop`: the rover stops (approved).
+8. Speed is capped at `MAX_SPEED`, and each move lasts `MOVE_MS` (max 500).
+9. Any error (Jev, camera or rover) means `stop`.
 
 The rover has its own second layer: the obstacle and tilt vetoes, and the watchdog.
+
+### Getting unstuck
+
+When forward is refused because the gap is too small — by the gate above, or by the rover's own 20 cm veto — the station runs a short manoeuvre instead of shuffling between forward and reverse:
+
+1. **Reverse** once for 500 ms.
+2. **Measure** the distance again. If it is now `SAFE_DISTANCE_CM` or more, the rover has room and Jev decides again.
+3. If the room did not improve, **pivot** three 500 ms steps (about 90°) toward the camera's open side, then hand back to Jev with a fresh view.
+4. After three manoeuvres in a row without room, it **stops** and prints that the rover needs a hand, rather than grinding against furniture.
+
+Each step waits for the move to finish before the next is sent: a new `/jev/cmd` replaces the move that is running, so three turns sent 90 ms apart only turned the wheels for 270 ms in total — and the distance check ran before the rover had moved at all. The manoeuvre spends no Jev calls, and can run with an old photo because it never drives forward.
+
+You will see this in the log as `recovery: not enough room ahead, so back off and measure the room`, then either `recovery: reversing gained room (36 cm -> 60 cm), handing back to Jev` or `recovery: reversing did not gain room (36 cm -> 39 cm), pivoting 3 steps (turn_right)`. In the run log each step is a normal decision with confidence 0.95 and the line `Recovery: …` at the top of the text Jev would have read.
 
 ### Run logs
 
@@ -304,6 +329,8 @@ CI runs both on every pull request.
 
 ## Not done yet
 
+* **Firmware 2.6.0** ([SPEC.md](../SPEC.md) milestone 11): reject accelerometer spikes far from 1 g, and make the web server survive the station's request rate. Until it is flashed, the station polls telemetry every 1000 ms and hides a `Tilt Warning` that the current orientation contradicts.
+* **The acceptance vision drive** ([SPEC.md](../SPEC.md) milestone 12): the free Gemini quota (20/day) was spent on 22 Oct, so the tuned station has not yet been driven on live vision end to end.
 * **Rover firmware on hardware.** The code is written and compiles in CI, but it hasn't been tested on the real rover yet.
 * **Camera `cam.local` and `/id` on hardware** ([SPEC.md](../SPEC.md) milestone 4). Written (firmware 2.1) and compiled in CI; waiting for the teammate's test.
 * **Photo descriptions on real photos** ([SPEC.md](../SPEC.md) milestone 5). The code is done and tested with a fake Gemini/Claude. Still to do: try it with a real Gemini key on photos from the rover camera, and measure speed.
