@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from . import safety_gate, state_text
+from . import safety_gate, state_text, vision_policy
 from .config import Settings
 from .describe import DescribeError, describe
 from .jev_client import JevBudgetError, JevClient, JevError
@@ -51,6 +51,14 @@ class Station:
         self._hold_reason: str | None = None  # why we are not asking Jev right now
         self.last: dict[str, Any] | None = None  # Jev's last choice and what the gate did
         self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY)  # newest last
+        # Vision is the expensive part: count every live description attempt.
+        self.vision_calls = 0
+        self.vision_budget_spent = False  # the log line is printed once, not every cycle
+        self.vision_gave_up = False  # ended the run because no description could be had
+        self.last_vision_ok_at: float | None = None  # time.monotonic() of the last good one
+        self.last_vision_reason: str | None = None  # why the last photo was described
+        self.last_vision_error: str | None = None
+        self.vision_in_flight = False  # the last allowed description may still arrive
 
     # ---------- pre-flight ----------
     async def _read_rover_with_retry(self, attempts: int = 3) -> dict[str, Any]:
@@ -97,8 +105,7 @@ class Station:
         try:
             photo = await self.camera.capture()
             self.board.post_photo(photo)
-            scene = await describe(photo, s)
-            self.board.post_scene(scene)
+            scene = await self._describe_photo(photo, "pre-flight")
             log.check(True, f'camera answering | {len(photo) / 1024:.1f} KB | "{scene["summary"]}"')
         except LinkError as e:
             ok = False
@@ -114,6 +121,12 @@ class Station:
             ok = False
             log.check(False, str(e))
 
+        if s.describe_mode == "live":
+            log.check(
+                True,
+                f"vision: {self.vision_calls} of {s.vision_max_calls} descriptions used "
+                "(pre-flight counts; the run reuses the rest)",
+            )
         log.check(True, f"logging to {log.path}")
         return ok
 
@@ -136,16 +149,31 @@ class Station:
         backoff_s = 0.0  # grows after a rate limit (429), reset on any good answer
         while True:
             try:
+                # Capture is free; only describing costs money/quota. So the
+                # photo stays fresh on mission control even when the description
+                # is reused.
                 photo = await self.camera.capture()
                 self.board.post_photo(photo)
                 self._clear_error("camera")
-                scene = await describe(photo, self.s)
-                self.board.post_scene(scene)
-                self._clear_error("vision")
-                backoff_s = 0.0
-                if scene["summary"] != last_summary:
-                    self.log.scene(scene)
-                    last_summary = scene["summary"]
+
+                why = vision_policy.refresh_reason(self.board, self.s, self._last_confidence())
+                if why is None:
+                    pass  # reuse the last description: no vision call at all
+                elif not self._vision_has_budget():
+                    if not self.vision_budget_spent:
+                        self.vision_budget_spent = True
+                        self.log.info(
+                            f"vision: budget used up ({self.vision_calls} of "
+                            f"{self.s.vision_max_calls} descriptions); reusing the last one",
+                            "yellow",
+                        )
+                else:
+                    scene = await self._describe_photo(photo, why)
+                    self._clear_error("vision")
+                    backoff_s = 0.0
+                    if scene["summary"] != last_summary:
+                        self.log.scene(scene)
+                        last_summary = scene["summary"]
             except LinkError as e:
                 self._error("camera", str(e))
             except DescribeError as e:
@@ -156,7 +184,46 @@ class Station:
                         f"vision: rate limited; waiting {backoff_s:.0f} s for the quota to reset",
                         "yellow",
                     )
-            await asyncio.sleep((backoff_s or self.s.camera_every_ms) / 1000)
+            # backoff_s is already in seconds; CAMERA_EVERY_MS is in milliseconds.
+            await asyncio.sleep(backoff_s or self.s.camera_every_ms / 1000)
+
+    def _vision_has_budget(self) -> bool:
+        """Without live vision there is nothing to budget: the mock is free."""
+        return self.s.describe_mode != "live" or self.vision_calls < self.s.vision_max_calls
+
+    def _last_confidence(self) -> float | None:
+        return None if self.last is None else self.last.get("confidence")
+
+    async def _describe_photo(self, photo: bytes, why: str) -> dict[str, Any]:
+        """One description. Every live attempt counts against VISION_MAX_CALLS:
+        a request that times out or is rate-limited may still use quota."""
+        live = self.s.describe_mode == "live"
+        if live:
+            if self.vision_calls >= self.s.vision_max_calls:
+                raise DescribeError(
+                    f"vision budget used up ({self.vision_calls} of "
+                    f"{self.s.vision_max_calls} descriptions, VISION_MAX_CALLS in .env)"
+                )
+            self.vision_calls += 1
+            self.last_vision_reason = why
+            self.log.info(
+                f"vision: describing because {why} "
+                f"({self.vision_calls} of {self.s.vision_max_calls} this run)",
+            )
+        self.vision_in_flight = True
+        try:
+            scene = await describe(photo, self.s)
+        except DescribeError as e:
+            if live:
+                self.last_vision_error = str(e)
+            raise
+        finally:
+            self.vision_in_flight = False
+        self.board.post_scene(scene)
+        if live:
+            self.last_vision_ok_at = time.monotonic()
+            self.last_vision_error = None
+        return scene
 
     async def decision_maker(self) -> None:
         """Returns when the Jev call limit is reached, which ends the run."""
@@ -175,6 +242,16 @@ class Station:
                 # anyway (old readings, or a photo description that hasn't arrived yet).
                 wait = self._gate_wait_reason()
                 if wait:
+                    # Vision is different from a slow rover link: if no description
+                    # can be had, waiting is forever. Stop the run cleanly instead.
+                    give_up = self._vision_give_up_reason() if wait.startswith("camera") else None
+                    if give_up:
+                        self.vision_gave_up = True
+                        self.log.info(f"vision: {give_up}", "red")
+                        self.log.info(
+                            "run ended: the rover was stopped, not left waiting", "yellow"
+                        )
+                        return
                     await self._hold(wait)
                 else:
                     self._release_hold()
@@ -184,13 +261,36 @@ class Station:
             await asyncio.sleep(self.s.decide_every_ms / 1000)
 
     def _gate_wait_reason(self) -> str | None:
-        """The gate's freshness rules, checked before asking Jev so credits aren't wasted."""
+        """Checked before asking Jev so credits aren't wasted on a vetoed answer."""
         t_age = self.board.telemetry_age_ms()
         if t_age is None or t_age > self.s.telemetry_max_age_ms:
             return "telemetry too old"
-        s_age = self.board.scene_age_ms()
-        if s_age is None or s_age > self.s.scene_max_age_ms:
-            return "camera description too old"
+        return vision_policy.stale_reason(self.board, self.s)
+
+    def _vision_give_up_reason(self) -> str | None:
+        """Why no usable description can arrive any more, or None to keep waiting."""
+        if self.s.describe_mode != "live":
+            return None
+        if self.vision_in_flight:
+            # The last allowed description is still being written; giving up now
+            # would waste it. If it fails, the budget check below ends the run.
+            return None
+        if self.vision_calls >= self.s.vision_max_calls:
+            self.vision_budget_spent = True
+            return (
+                f"vision budget used up ({self.vision_calls} of "
+                f"{self.s.vision_max_calls} descriptions, VISION_MAX_CALLS in .env) and the "
+                "last description is too old; stopping so the rover does not drive blind"
+            )
+        if self.last_vision_ok_at is None:
+            return None  # pre-flight always makes one, so there is a reference point
+        lost_s = time.monotonic() - self.last_vision_ok_at
+        if lost_s >= self.s.vision_lost_stop_s:
+            return (
+                f"no camera description for {lost_s:.0f} s "
+                f"(VISION_LOST_STOP_S is {self.s.vision_lost_stop_s:.0f}); "
+                "stopping so the rover does not drive blind"
+            )
         return None
 
     async def _hold(self, reason: str) -> None:
@@ -225,6 +325,8 @@ class Station:
             decision = None
 
         gate = safety_gate.check(decision, board, self.s)
+        if decision is not None and decision.confidence < self.s.min_confidence:
+            board.note_unsure()
         reply = None
         sent = None
         # Paused: STOP was pressed while Jev was answering, so this answer is dropped.
@@ -234,7 +336,10 @@ class Station:
                 board.last_command = gate.command
                 sent = gate.command["action"]
                 stats["sent"] += 1
-                if not reply.get("ok"):
+                if reply.get("ok"):
+                    # A refused move did not change the view, so it is not counted.
+                    board.note_move(sent)
+                else:
                     stats["refused"] += 1
             except LinkError as e:
                 self._error("rover-cmd", str(e))
@@ -292,6 +397,15 @@ class Station:
                 "max_calls": self.s.jev_max_calls,
                 "budget_spent": self.jev_budget_spent,
             },
+            "vision": {
+                "mode": self.s.describe_mode,
+                "calls": self.vision_calls,
+                "max_calls": self.s.vision_max_calls,
+                "budget_spent": self.vision_budget_spent,
+                "gave_up": self.vision_gave_up,
+                "last_reason": self.last_vision_reason,
+                "last_error": self.last_vision_error,
+            },
             "log": str(self.log.path),
         }
 
@@ -308,7 +422,12 @@ class Station:
         if self.s.describe_mode == "mock":
             vision = {"state": "off", "detail": "off: Jev drives on the sensors only"}
         else:
-            vision = link("vision", b.scene is not None, self.s.vision_model)
+            vision = link(
+                "vision",
+                b.scene is not None,
+                f"{self.s.vision_model} | {self.vision_calls} of "
+                f"{self.s.vision_max_calls} descriptions used",
+            )
         if self.s.jev_mode == "mock":
             jev = {"state": "ok", "detail": "pretend Jev (free)"}
         else:
@@ -331,7 +450,8 @@ class Station:
             for w in (self.sensor_reader, self.camera_watcher, self.decision_maker)
         ]
         try:
-            # Only the decision maker ever finishes: when the Jev call limit is reached.
+            # The decision maker finishes at the Jev call limit, or when vision
+            # cannot produce a usable description any more.
             await asyncio.wait(workers, return_when=asyncio.FIRST_COMPLETED)
         finally:
             for w in workers:
@@ -351,6 +471,11 @@ class Station:
         )
         if self.s.jev_mode == "live":
             self.log.info(self.jev.usage_line(), "yellow")
+        if self.s.describe_mode == "live":
+            line = f"Vision used {self.vision_calls} of {self.s.vision_max_calls} descriptions"
+            if self.last_vision_error:
+                line += f" | last problem: {self.last_vision_error}"
+            self.log.info(line, "yellow")
 
     async def _send_stop(self) -> None:
         if self.s.suggest_only:

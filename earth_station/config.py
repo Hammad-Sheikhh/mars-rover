@@ -39,6 +39,11 @@ class Settings:
     vision_effort: str  # anthropic only: how hard Claude thinks; low is fastest and cheapest
     vision_focus: str  # comma-separated objects the vision AI should watch out for
     vision_timeout_s: float
+    vision_max_calls: int  # live descriptions allowed per run: vision costs money/quota
+    vision_refresh_ms: int  # reuse one description for at most this long
+    vision_refresh_moves: int  # ... and for at most this many movement steps
+    vision_close_cm: int  # refresh when something this close has got closer
+    vision_lost_stop_s: float  # end the run after this long with no description
 
     telemetry_every_ms: int
     camera_every_ms: int
@@ -51,6 +56,7 @@ class Settings:
     safe_distance_cm: int
     telemetry_max_age_ms: int
     scene_max_age_ms: int
+    scene_max_moves: int  # never drive forward further than this on one description
 
     goal: str
     mission_control_port: int  # the page at http://127.0.0.1:<port>; 0 picks a free one
@@ -98,6 +104,11 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         vision_effort=_str("VISION_EFFORT", "low").lower(),
         vision_focus=_str("VISION_FOCUS", ""),
         vision_timeout_s=_float("VISION_TIMEOUT_S", 10.0),
+        vision_max_calls=_int("VISION_MAX_CALLS", 6),
+        vision_refresh_ms=_int("VISION_REFRESH_MS", 12000),
+        vision_refresh_moves=_int("VISION_REFRESH_MOVES", 14),
+        vision_close_cm=_int("VISION_CLOSE_CM", 60),
+        vision_lost_stop_s=_float("VISION_LOST_STOP_S", 60.0),
         telemetry_every_ms=_int("TELEMETRY_EVERY_MS", 200),
         camera_every_ms=_int("CAMERA_EVERY_MS", 1500),
         decide_every_ms=_int("DECIDE_EVERY_MS", 500),
@@ -107,7 +118,8 @@ def load(env_file: Path | None = None, **overrides) -> Settings:
         move_ms=_int("MOVE_MS", 300),
         safe_distance_cm=_int("SAFE_DISTANCE_CM", 40),
         telemetry_max_age_ms=_int("TELEMETRY_MAX_AGE_MS", 500),
-        scene_max_age_ms=_int("SCENE_MAX_AGE_MS", 3000),
+        scene_max_age_ms=_int("SCENE_MAX_AGE_MS", 20000),
+        scene_max_moves=_int("SCENE_MAX_MOVES", 24),
         goal=_str("GOAL", "explore the room safely"),
         mission_control_port=_int("MISSION_CONTROL_PORT", 8000),
         suggest_only=False,
@@ -147,6 +159,21 @@ def validate(s: Settings) -> None:
         raise ConfigError("VISION_EFFORT must be low, medium, high, xhigh or max")
     if s.vision_timeout_s <= 0:
         raise ConfigError("VISION_TIMEOUT_S must be more than 0")
+    if s.vision_max_calls < 1:
+        raise ConfigError("VISION_MAX_CALLS must be 1 or more (live descriptions allowed per run)")
+    if not 0 < s.vision_refresh_ms < s.scene_max_age_ms:
+        raise ConfigError(
+            "VISION_REFRESH_MS must be more than 0 and less than SCENE_MAX_AGE_MS, "
+            "so a new photo is ordered before the gate calls the description too old"
+        )
+    if s.scene_max_moves < 1:
+        raise ConfigError("SCENE_MAX_MOVES must be 1 or more (drive steps per description)")
+    if not 1 <= s.vision_refresh_moves <= s.scene_max_moves:
+        raise ConfigError("VISION_REFRESH_MOVES must be between 1 and SCENE_MAX_MOVES")
+    if s.vision_close_cm < 0:
+        raise ConfigError("VISION_CLOSE_CM must be 0 or more")
+    if s.vision_lost_stop_s <= 0:
+        raise ConfigError("VISION_LOST_STOP_S must be more than 0")
     if not s.rover_cmd_token:
         raise ConfigError("ROVER_CMD_TOKEN is empty; set the same value as in rover1/secrets.h")
     if not 0 < s.min_confidence <= 1:
