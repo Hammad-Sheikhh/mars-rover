@@ -119,6 +119,10 @@ def test_state_has_what_the_page_shows(settings):
         assert s["stats"]["decisions"] == 2
         assert s["photo_id"] >= 1
         assert s["limits"]["min_confidence"] == st.s.min_confidence
+        assert s["vision"]["mode"] == "mock"
+        assert s["vision"]["calls"] == 0
+        assert s["vision"]["max_calls"] == st.s.vision_max_calls
+        assert "Vision calls" in page.text
 
         # the page explains each decision: recent history and what Jev was told
         assert len(s["history"]) == 2 and s["history"][-1] == s["last"]

@@ -68,6 +68,30 @@ def test_stale_scene_means_stop(settings):
     assert safety_gate.check(decision(), b, settings).reason == "camera description too old"
 
 
+def test_stale_scene_only_blocks_forward(settings):
+    """Turning in place is safe with an old picture; driving forward is not."""
+    b = board_in_jev()
+    b.scene_at -= settings.scene_max_age_ms + 100
+
+    assert (
+        safety_gate.check(decision("forward"), b, settings).reason == "camera description too old"
+    )
+    turn = safety_gate.check(decision("turn_left"), b, settings)
+    assert turn.approved and turn.command["action"] == "turn_left"
+    back = safety_gate.check(decision("reverse"), b, settings)
+    assert back.approved and back.command["action"] == "reverse"
+
+
+def test_too_far_since_the_photo_blocks_forward(settings):
+    b = board_in_jev()
+    for _ in range(settings.scene_max_moves + 1):
+        b.note_move("forward")
+
+    forward = safety_gate.check(decision("forward"), b, settings)
+    assert not forward.approved and forward.reason == "camera view is out of date"
+    assert safety_gate.check(decision("turn_right"), b, settings).approved
+
+
 def test_sequence_numbers_increase(settings):
     b = board_in_jev()
     a = safety_gate.check(decision(), b, settings).command["seq"]

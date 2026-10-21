@@ -16,8 +16,9 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover (ESP32): driving, sensors, own WiFi control page | ✅ Works |
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
-| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **First live-Jev floor drive done 20 Oct (Milestone 8, part 2): live Jev + Gemini vision, four approved forward moves (~17 cm), then the gate stopped it at 0.54–0.59 confidence near a wall. A longer drive needs a bigger clear space, a charged battery and vision quota** |
-| Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
+| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **20 Oct: 30-call run (26 approved forward moves, ~1 m+, 3 gate stops, 0 collisions) and a 200-call run (199 decisions, 197 sent, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out).** The 200-call run ended 104 cm from the office chair. **21 Oct: milestone 9 built** — descriptions are reused, live vision is capped at 6 per run, and the station stops cleanly when vision is gone |
+| Vision cost control (reuse descriptions, 6-call budget, clean stop) | ✅ Milestone 9 built 21 Oct: one description lasts until 14 steps / 12 s / something close / Jev unsure; at most 6 live descriptions per run (pre-flight included); forward refused past 20 s or 24 steps; clean stop after 60 s without vision. 146 tests pass; awaits a real run |
+| Project plan (`SPEC.md`) | ✅ Written. Milestones 0–9 |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
 | Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
@@ -46,6 +47,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **Photo descriptions use `claude-opus-5-5` at effort `low`** (2026-10-06), with a fixed answer form (structured output). Both are settings in `.env` (`VISION_MODEL`, `VISION_EFFORT`). *Why:* low effort keeps each answer quick and cheap.
 - **No paid photo descriptions for now** (2026-10-06). The Claude API costs roughly $15–25 per hour of driving on the default model, which we can't afford now. `DESCRIBE_MODE` stays `mock`, and Jev drives on the distance and tilt sensors. *Why:* the rover's own safety rules already stop it before it hits things. A free option (a vision AI running on the laptop, or simple image rules) can come later. Jev's $5 is affordable and will come later.
 - **Photo descriptions run on Gemini's free tier** (2026-10-20). New `VISION_PROVIDER` setting: `gemini` (free key from Google AI Studio, one photo every ~5 s) or `anthropic` (the old paid Claude path, kept working). `VISION_FOCUS` names the objects that matter. *Why:* Jev only needs a short, honest description; the free tier makes it $0, and enabling billing later changes nothing in the code.
+- **Vision calls are budgeted separately from Jev, and one description is reused** (2026-10-21). Vision costs more per call than Jev, so the station describes again only when there is no description, the rover moved 14 steps (a turn counts as 6), the description is 12 s old, something within 60 cm got 20 cm closer, or Jev was unsure. A run makes at most **6** live descriptions (pre-flight included); the gate refuses forward on a view older than 20 s or 24 steps (turns and reverse stay allowed); and the run stops cleanly when the budget is spent with a stale view, or after 60 s without a description. *Why:* the 200-call run used ~13–15 descriptions and exhausted Gemini's 20/day free quota; the next attempt then waited forever. Jev credits are not the bottleneck.
 - **Commit early and often, theme-wise** (2026-10-20), a standing rule now in `CLAUDE.md` and `CONTRIBUTING.md`. *Why:* many small, themed commits are easier to review, revert and understand than one big one.
 - **Jev spending guard** (2026-10-06): each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and ends. `--sim` uses the pretend Jev unless you add `--live-jev`. Tests never call the real Jev. *Why:* credits cost money, and the leader wants very careful use while we build.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
@@ -56,13 +58,72 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct.** Live Jev + Gemini vision moved the real rover ~17 cm on the floor; the gate stopped it safely at 0.54–0.59 confidence near a wall. **Next proper run:** clear a 2 m lane, charge or swap the rover battery (the reboot and weak motors point to voltage sag), keep the camera on lit open floor, then run 20–30 calls with the validated `gemini-3.5-flash` key. Use `--live-jev`; `.env` stays `JEV_MODE=mock`. The 2–3 kg rover needs full power (255) and chained 500 ms pulses; sensor-only Jev is too unsure for a long drive.
+1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct, including the 30-call and 200-call runs.** The 200-call run made 199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out. ~~Milestone 9 — vision cost control.~~ **Built 21 Oct** on `feat/station-vision-budget` (PR #33, stacked on PR #32): reuse one description, refresh only when needed, cap at 6 per run, stop cleanly after 60 s without vision. **Next: merge PR #32, then PR #33, then run a real 200-call drive with the new budget and review the log.** No board flash is needed (Python-only).
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
-3. ~~Later: a free way for the camera to help Jev~~ **Built, live-tested, and mounted on the rover.** The photo pipeline is validated. The free tier is **20 requests/day per project per model**, so a long vision drive needs billing, a new project/key, or `DESCRIBE_MODE=mock`; the station backs off 15–120 s on a 429.
+3. ~~Later: a free way for the camera to help Jev~~ **Built, live-tested, and mounted on the rover.** The free tier is **20 requests/day per project per model**; the 200-call run used ~13–15 descriptions and exhausted it. The next attempt then hung waiting for vision. Milestone 9 makes vision cheap and bounded. Options remain billing, a new project/key, later a local model, or `DESCRIBE_MODE=mock` for sensor-only tests.
+4. **When firmware changes next, flash each board separately** (`rover1`, then `cam1`). The current boards are rover **2.5.5** and camera **2.2.0**; no flash was done in the last sessions, and the vision work does not need one.
 
 ---
 
 ## Session log
+
+### 2026-10-21 — Session 19: vision cost control (milestone 9)
+
+**What we did**
+
+1. **Built milestone 9** on `feat/station-vision-budget` (PR #33), stacked on `fix/station-vision-resilience` (PR #32) because the resilience work is its base.
+2. **One description now serves many decisions.** New `earth_station/vision_policy.py` decides when a photo is worth another call: no description yet, the rover moved `VISION_REFRESH_MOVES` (14) steps, the description is `VISION_REFRESH_MS` (12 s) old, something within `VISION_CLOSE_CM` (60 cm) got 20 cm closer, or Jev was unsure. A turn counts as 6 steps, because it changes what the camera sees.
+3. **A hard budget and a clean stop.** Every live attempt counts against `VISION_MAX_CALLS` (default 6), including the pre-flight photo and failed/rate-limited attempts, because those may still use quota. When the budget is spent the station keeps driving on the last description; if that gets stale it stops the rover and ends the run. The same clean stop happens after `VISION_LOST_STOP_S` (60 s) without a successful description — no more waiting forever on a 429.
+4. **The safety gate now only vetoes forward on an old view** (`SCENE_MAX_AGE_MS` 20 s, `SCENE_MAX_MOVES` 24). Turns and reverse are still allowed by the gate; the station also holds Jev calls while the view is stale, so it never pays for an answer it may have to throw away. This fixed the session-18 hang.
+5. **Mission control shows the vision budget:** `Vision calls: X used, Y left of Z` (or `off` in mock mode), plus badges when the budget is spent or the run gave up.
+6. **Found and fixed a real bug in the session-18 backoff.** The log said "waiting 15 s" but the sleep divided the seconds by 1000 again, so it waited **15 ms** and hammered the quota. The new clean-stop test caught it: the test expected 2 attempts and saw 5. It now sleeps 15 → 30 → 60 → 120 s for real.
+7. **The dashboard now says "no reading" for a missing ultrasonic echo.** The rover sends `distance_cm: -1` when the HC-SR04 gets no echo within 12 ms (~2 m). The history table used to show a blank (its parser only matched digits), and the sensor box showed `-1 cm`. All three places now say "no reading". This is not a sensor fault; see "Things to remember".
+8. **Tests and checks:** new `tests/test_vision_budget.py` (a 200-decision simulator run with a refresh wanted after every move uses exactly 6 descriptions; a stationary run uses only the pre-flight one; both clean stops; the run waits for the last allowed description while it is in flight), forward-vs-turn gate tests, mission-control snapshot/page tests. **146 tests pass, ruff clean.** A 251-decision simulator run (`DESCRIBE_MODE=mock`) ran without errors; mission control showed the vision block.
+9. **Docs:** `.env.example`, `README.md` (status, features, Quick Start D), `docs/EARTH_STATION.md` (settings, vision-cost section, safety rules), `SPEC.md` (D6, milestone 9), `CHANGELOG.md` and this diary.
+10. **No flashing.** This is Python-only; the rover stays on 2.5.5 and the camera on 2.2.0.
+
+**Things to remember**
+
+- **`distance_cm: -1` means "no echo within ~2 m", not "sensor dead".** The firmware takes three HC-SR04 readings and keeps the median; a soft, angled or low object can miss the cone, and anything past ~2 m is out of range. A dash/blank on the page is the UI's old way of showing that.
+- **If the distance stays "no reading" with a wall 30–50 cm ahead, check the sensor.** TRIG is GPIO 32, ECHO is GPIO 35, and the module needs 5 V and a shared ground. A single missed echo is normal; a permanent one is wiring or a dead module.
+- **When the distance is unknown, the rover's 20 cm forward veto cannot fire** (`lastDistanceCm > 0` guard). The station's gate and the camera are then the only forward guard, which is exactly why the gate stopping at 60% confidence is healthy.
+- **The blank distance and the 60% gate stops are related but not a fault.** Jev is less sure when it has no distance reading; 0.58/0.59 is just under the 0.60 floor, so the gate stops. That is the system refusing to drive on a guess.
+- **PR #32 must merge before PR #33 (milestone 9).** The milestone-9 branch is stacked on it; merging #32 first keeps the diff honest.
+- **The next real run is the acceptance test:** 200 Jev calls with `DESCRIBE_MODE=live`, expect ≤6 live descriptions, and confirm the run ends cleanly if the quota is already gone.
+
+### 2026-10-21 — Session 18: the 200-call run and the vision bill
+
+**What we did**
+
+1. **Ran the 200-call live-Jev + Gemini session** from the same spot (the leader chose "start anyway"). Result: **199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 rover refusals; 110,980 tokens in / 15,006 out.** The run ended at the 200-call limit. The rover finished 104 cm from the office chair; no collision. A vision 503 at 22:15:52 recovered after ~18 s, and one rover command did not answer (#66) before the link recovered.
+2. **Tried a second 200-call run.** Pre-flight first failed with a Gemini 503 ("high demand"); after a 30 s wait the retry started. It made **30 decisions**, then Gemini returned **429 (daily quota)**. The station held because the camera description was older than 20 s and it refused to spend Jev calls. Since the Jev budget was only 30/200, it waited forever instead of ending. The log's last line was `vision: rate limited; waiting 120 s for the quota to reset`. The run was stopped; there was no crash and no rover fault.
+3. **Found the cost problem.** The 200-call run used roughly **13–15 live descriptions**; the free Gemini tier is **20 requests/day per model**, so two long runs exhaust it. The leader confirmed Jev usage is sufficient but vision costs more per call. **Decision: milestone 9 — vision cost control** (reuse one description, refresh only when needed, cap at 6 per run, stop cleanly after 60 s without vision).
+4. **Paused everything.** The laptop had rejoined the home WiFi again; after switching back to the hotspot, a full scan found neither board. Last known rover state was `mode=jev`, `distance 78 cm`, `i2c_ok=1`. No Earth Station process was left running; the rover's 1.5 s watchdog stops it when commands cease.
+5. **No flashing was done.** The rover remains on **2.5.5** and the camera on **2.2.0**. Each board is flashed separately, and the vision fix is Python-only, so it needs **no flash at all**.
+
+**Things to remember**
+- **Vision is the expensive part, not Jev.** A 200-call run needs ~13–15 descriptions; the free quota is 20/day/model, so two runs exhaust it.
+- **When vision is unavailable, the station currently waits forever** if the Jev call budget has not been spent. Milestone 9 adds a clean stop after 60 s without vision, so this cannot hang again.
+- The 200-call run used **110,980 tokens in / 15,006 out**; budget Jev usage from that number.
+- **Each board has its own firmware.** Flashing `rover1` does not update `cam1`. Current versions: rover 2.5.5, camera 2.2.0.
+- The laptop rejoining the home WiFi is a recurring trap; pin the hotspot and check for a `10.x` address before believing "board not found".
+- Gemini called the floor open while a person/chair was ahead. Put people and chair legs in `VISION_FOCUS`, or keep them out of the forward view.
+
+### 2026-10-20 — Session 17: the 30-call live vision drive
+
+**What we did**
+
+1. **Got the laptop back on the hotspot.** It had rejoined the home WiFi, so `rover.local` / `cam.local` did not resolve. After switching, the finder found the rover at `10.126.53.152` (firmware 2.5.5) and the camera at `10.126.53.174`.
+2. **Checked the hardware before spending calls.** The rover reported `i2c_ok=1`, `i2c_recov=0`, sane pitch/roll and `mode=manual`. The camera returned a 17.5 KB photo; Gemini described open floor ahead and to the right. `distance_cm=-1` at the start meant **nothing within the ultrasonic's ~2 m range**, not a dead sensor.
+3. **Ran the full 30-call test** (`--live-jev`, `JEV_MAX_CALLS=30`, live Gemini vision, full speed 255, 500 ms pulses). The run took ~16 s and used all 30 calls: **29 decisions, 26 approved forward moves, 3 gate stops, 0 rover refusals**. Confidence ranged 0.58–0.96; the three stops were all "Jev unsure (0.58)". Jev latency was ~0.5 s per decision; usage was 16,531 tokens in / 2,250 out.
+4. **The rover travelled roughly 1 m+ with no collision.** At the start the path was beyond 2 m (distance `-1`); at the end the ultrasonic read **85 cm** to the office chair, and the final photo showed the rover close to the chair/person. The station sent a final stop on exit.
+5. **One safety learning:** Gemini described the floor as open and `obstacle_ahead=false` while a seated person and chair were in the forward view. The rover drove toward them until the call limit; only confidence, not the person, slowed it. The rover's 20 cm veto and the station's gate were never bypassed.
+
+**Things to remember**
+- `distance_cm=-1` can simply mean "clear beyond ~2 m". Watch it change to a real number as an object comes into range; it read 85 cm at the end.
+- A 30-call run is ~15 s of drive and ~1.1 m at full power. The 0.60 confidence gate is what stops most marginal decisions.
+- Put **people, chair legs and bags** in `VISION_FOCUS`, or keep them out of the forward view. Vision can call a floor "open" even when a person is sitting in it.
+- The laptop rejoining the home WiFi is a recurring trap: check the hotspot and the laptop's `10.x` address before believing a "board not found" error.
 
 ### 2026-10-20 — Session 16: the first floor drive (Milestone 8, part 2)
 

@@ -49,6 +49,7 @@ graph TD
 | Rover Jev Auto mode (firmware 2.1) | ✅ Hardware-tested (19/20 Oct 2026): all four drive moves, obstacle veto (<20 cm), watchdog, token check ([SPEC.md](SPEC.md) milestone 3) |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
 | Photo descriptions with Gemini vision (`describe.py`) | ✅ Merged + live-tested with a free Gemini key (2.4 s). Free tier is **20 requests/day per model**, so long drives need billing or `DESCRIBE_MODE=mock` (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
+| Vision cost control (reuse descriptions, 6-call budget) | ✅ Built (PR #33, 21 Oct 2026; stacked on PR #32): one description is reused until the rover moves 14 steps, 12 s pass, something close gets closer, or Jev is unsure. At most 6 live descriptions per run (pre-flight included) — a 200-decision simulator run with a worst-case refresh every move used exactly 6, and a normal run uses far fewer. If vision is rate-limited or gone, the station stops cleanly after 60 s instead of waiting ([SPEC.md](SPEC.md) milestone 9) |
 | Camera + vision bench (`bench.py`) | ✅ Merged: `python -m earth_station.bench` scores the photo pipeline (smoke / stamina / ground-truth probes / rate-limit burst) before the camera goes on the rover |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
@@ -83,7 +84,8 @@ graph TD
 *   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
 *   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions. Add `--live-jev` to use it with the simulator.
 *   **Jev spending guard**: `--sim` is free (pretend Jev) unless you add `--live-jev`. Each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and prints the calls and tokens used.
-*   **Mission control page**: each run opens `http://127.0.0.1:8000` in your browser and explains every decision in plain words, in four left-to-right steps: what the rover sees (with a distance gauge) → what Jev chose (with its confidence) → what the safety gate did (with the reason) → what the rover did. Below that: a table of the last 20 decisions, the exact words sent to Jev, the sensor readings, the camera photo and description, and each link's status. A big **STOP** button (or the `Esc` key) stops the rover and pauses Jev until you press **Resume**. Only this laptop can open it. `--no-browser` skips opening it.
+*   **Vision cost control**: one description is reused until the rover has moved 14 steps, the description is 12 s old, something close gets closer, or Jev is unsure. Each run makes at most `VISION_MAX_CALLS` real descriptions (default 6, pre-flight included). If vision is rate-limited or gone, the station stops cleanly after 60 s instead of waiting forever.
+*   **Mission control page**: each run opens `http://127.0.0.1:8000` in your browser and explains every decision in plain words, in four left-to-right steps: what the rover sees (with a distance gauge) → what Jev chose (with its confidence) → what the safety gate did (with the reason) → what the rover did. Below that: a table of the last 20 decisions, the exact words sent to Jev, the sensor readings, the camera photo and description, the vision budget (used and left), and each link's status. A big **STOP** button (or the `Esc` key) stops the rover and pauses Jev until you press **Resume**. Only this laptop can open it. `--no-browser` skips opening it.
 *   **Run logs**: every decision saved to `runs/*.jsonl` for replay.
 *   **One place for the hotspot**: type the hotspot name and password once in `.env`; `python -m earth_station.secrets` writes both boards' `secrets.h` from it and makes the rover token.
 *   **Check command**: `python -m earth_station --check` tests the settings files, the rover, the camera and Jev, and says in plain words how to fix each problem. Nothing moves.
@@ -223,9 +225,9 @@ If someone else flashes the rover, send them `rover1/secrets.h` (or just the tok
 
 Jev can't see pictures, so a vision AI can look at each camera photo and write a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
 
-**You can skip this part.** The recommended provider is Google's Gemini, which has a **free tier** (no credit card). Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply. Keep the photo rate gentle (`CAMERA_EVERY_MS=5000`); faster rates need billing enabled, at roughly $0.05–0.12 per hour of driving.
+**You can skip this part.** The recommended provider is Google's Gemini, which has a **free tier** (no credit card). Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply. You no longer need to slow the camera down to protect the quota: the station reuses one description and caps a run at `VISION_MAX_CALLS` (default 6, pre-flight included).
 
-**Free-tier quota, measured 2026-10-20:** Gemini 2.5 Flash allows only **20 requests per day per model** on the free tier (the API says "retry in ~15 h" when it runs out). A pre-flight plus a 10-call drive can use that up, so a long vision drive needs billing or `DESCRIBE_MODE=mock`. The station now backs off and waits when it sees a rate limit instead of retrying every 5 s.
+**Free-tier quota, measured 2026-10-20:** Gemini 2.5 Flash allows only **20 requests per day per model** on the free tier (the API says "retry in ~15 h" when it runs out). A run now uses at most 6, so the quota lasts several short runs; a long drive still needs billing or `DESCRIBE_MODE=mock`. If the quota is gone, the station stops the rover and ends the run cleanly instead of waiting forever.
 
 1. Get a key: sign in at [aistudio.google.com](https://aistudio.google.com) with a Google account, click **Get API key**, create one, copy it.
 2. Open `.env` and set:
@@ -233,16 +235,15 @@ Jev can't see pictures, so a vision AI can look at each camera photo and write a
    DESCRIBE_MODE=live
    VISION_PROVIDER=gemini
    VISION_API_KEY=<paste your key here>
-   CAMERA_EVERY_MS=5000
    ```
-   Save the file. Like the Jev key, it never goes to GitHub. Never paste it into code, issues or chat.
+   Save the file. Like the Jev key, it never goes to GitHub. Never paste it into code, issues or chat. The defaults reuse a description for up to 14 steps or 12 s and allow 6 real descriptions per run; raise `VISION_MAX_CALLS` only if billing is enabled.
 3. Tell it what matters most in your rooms — comma-separated in `VISION_FOCUS` (e.g. `cables on the floor, stairs or drops, pet or person's feet`). The description Jev reads will bias towards those objects.
 4. Try it on any photo saved on the laptop (internet needed, no rover):
    ```sh
    python -m earth_station.describe path/to/photo.jpg
    ```
    It prints the description and how many seconds it took. You can give several photos at once.
-5. If it fails, the message says why: `rejected VISION_API_KEY` means the key is wrong, `rate limit` means the free tier wants slower photos, and `cannot reach` means no internet. To go back to the offline stand-in, set `DESCRIBE_MODE=mock`.
+5. If it fails, the message says why: `rejected VISION_API_KEY` means the key is wrong, `rate limit` means the daily free quota is gone (the station now stops cleanly instead of waiting), and `cannot reach` means no internet. To go back to the offline stand-in, set `DESCRIBE_MODE=mock`.
 
 **Prefer Claude?** Set `VISION_PROVIDER=anthropic` and `VISION_MODEL=claude-opus-5-5`, put an Anthropic key in `VISION_API_KEY` ([console.anthropic.com](https://console.anthropic.com), paid), and leave `CAMERA_EVERY_MS` as you like. The description shape and every message stay the same — only `.env` changes.
 

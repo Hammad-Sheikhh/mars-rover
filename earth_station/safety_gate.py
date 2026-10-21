@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from . import vision_policy
 from .config import Settings
 from .jev_client import Decision
 from .whiteboard import Whiteboard
@@ -33,13 +34,19 @@ def check(decision: Decision | None, board: Whiteboard, s: Settings) -> GateResu
     t_age = board.telemetry_age_ms()
     if t_age is None or t_age > s.telemetry_max_age_ms:
         return stop("telemetry too old")
-    s_age = board.scene_age_ms()
-    if s_age is None or s_age > s.scene_max_age_ms:
-        return stop("camera description too old")
 
     # 6 (checked early). Errors mean stop.
     if decision is None:
         return stop("no answer from Jev")
+
+    # 2b. Forward needs a description that still matches the view. Turning in
+    # place or reversing does not: the rover is not driving into the unknown
+    # ahead, and the firmware's tilt and distance vetoes still guard it. This is
+    # what lets a drive keep working while the camera waits for a new photo.
+    if decision.action == "forward":
+        stale = vision_policy.stale_reason(board, s)
+        if stale:
+            return stop(stale)
 
     # 3. Jev must be sure.
     if decision.confidence < s.min_confidence:
