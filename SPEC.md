@@ -118,7 +118,7 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 | D3 | Target **2–5 s** per description; `VISION_TIMEOUT_S` (default 40 s) is the hard limit. If it is slower or fails, the scene goes stale and the safety gate stops the rover. |
 | D4 | Test it on saved photos with no rover: `python -m earth_station.describe photo.jpg`. Keep a few sample photos in `tests/photos/` for the tests. |
 | D5 | **Live vision is optional.** `DESCRIBE_MODE=mock` stays the safe default without a key. The free Gemini tier is **20 requests/day per model** (measured 20 Oct 2026), so live vision must be budgeted (D6). A real photo in `mock` mode must tell Jev honestly that there is no camera vision, and never claim the way is clear. |
-| D6 | **Cost guard (2026-10-21):** one description is reused for many Jev decisions. Refresh only when needed: the first frame, the rover has moved a set distance, the scene is older than `SCENE_MAX_AGE_MS`, the distance sensor is below `VISION_NEAR_CM`, or Jev was unsure. A run makes at most `VISION_MAX_CALLS` live descriptions (target **6** per 200 Jev calls). If vision is unavailable for `VISION_UNAVAILABLE_S` (default 60 s), the run stops cleanly instead of waiting forever. |
+| D6 | **Cost guard (2026-10-21):** one description is reused for many Jev decisions. Refresh only when needed: the first frame, the rover has moved `VISION_REFRESH_MOVES` (14) steps, the description is older than `VISION_REFRESH_MS` (12 s), something within `VISION_CLOSE_CM` (60 cm) is 20 cm closer, or Jev was unsure. Hard forward limits: `SCENE_MAX_AGE_MS` (20 s) and `SCENE_MAX_MOVES` (24); turns and reverse stay allowed. A run makes at most `VISION_MAX_CALLS` live descriptions (default **6**, pre-flight included). If no description succeeds for `VISION_LOST_STOP_S` (default 60 s), or the budget is spent and the view is stale, the run stops cleanly instead of waiting forever. |
 
 ### 4.6 Jev
 
@@ -146,7 +146,7 @@ The camera needs only N3, N4 and N5. Its `/capture` endpoint already does what w
 
 ## 5. Setup procedure (the target)
 
-This is how setup looks today, with milestones 1–8 done. The README always shows the steps that work *today*.
+This is how setup looks today, with milestones 1–9 done. The README always shows the steps that work *today*.
 
 ### A. Any laptop, once (no hardware needed)
 
@@ -194,9 +194,9 @@ Each milestone is **one pull request**. Laptop work is tested on the simulator f
 | 6 | **Mission control page.** ✅ Done: works on the simulator, with tests for STOP/Resume, plus a plain-word, step-by-step view of each decision and a recent-decisions table. | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
 | 7 | **Live Jev.** ✅ Done: spending guard (J4) plus 30-call and 200-call runs on the real rover, 20 Oct. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
 | 8 | **First real drive.** ✅ Done 20 Oct: 30-call and 200-call live-Jev + Gemini runs. The 200-call run exposed the vision cost/quota limit and a hang when vision disappears. | Yes (done) | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
-| 9 | **Vision cost control**: reuse descriptions, refresh on demand, `VISION_MAX_CALLS` budget (target 6), clean stop after 60 s without vision. **Next.** | No | A 200-call run uses **≤6** live descriptions; the station stops cleanly on 429/503 instead of waiting; simulator tests cover the budget and the clean stop. |
+| 9 | **Vision cost control**: reuse descriptions, refresh on demand, `VISION_MAX_CALLS` budget (target 6), clean stop after 60 s without vision. ✅ Done 21 Oct: the 200-decision simulator run used exactly 6 live descriptions in the worst case (a new photo wanted after every move); rate limits and a spent budget stop the run cleanly. | No | A 200-call run uses **≤6** live descriptions; the station stops cleanly on 429/503 instead of waiting; simulator tests cover the budget and the clean stop. |
 
-**Live Jev (7) came first**, because it's the heart of the project (decided 2026-10-05). Milestones 1–8 are done. **Milestone 9 is next**, because vision is now the cost bottleneck. Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai).
+**Live Jev (7) came first**, because it's the heart of the project (decided 2026-10-05). Milestones 1–9 are done. The next step is a real 200-call run with the new vision budget, then review the log together. Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai).
 
 ## 7. Not in scope (for now)
 
@@ -210,7 +210,7 @@ Each milestone is **one pull request**. Laptop work is tested on the simulator f
 | Question | How we'll answer it |
 |---|---|
 | Does `.local` work on our phone's hotspot? Some phones block devices from seeing each other. | Works on the current hotspot; the network scan is the backup. Windows sometimes rejoins the home WiFi, so pin the hotspot before trusting a "board not found" result. |
-| What is the cheapest safe vision cadence? | Milestone 9: reuse one description, refresh only when the rover has moved, an obstacle is close, the scene is stale, or Jev is unsure; cap at 6 descriptions per 200-call run. Measure with the simulator and real runs. |
+| What is the cheapest safe vision cadence? | Answered by milestone 9: one description is reused until the rover moves 14 steps or 12 s pass (or something close gets closer, or Jev is unsure), with a hard cap of 6 descriptions per run and a clean stop when vision is gone. Confirm on the next real 200-call run. |
 | Can Jev accept the photo directly? | Ask TypeSafe. If Jev can see images, the separate vision bill disappears. Until then, `describe.py` stays. |
 | A free/local way for the camera to help (no paid API) | Later: a small vision model on the laptop (for example Ollama) or simple image rules. The vision budget in milestone 9 is the cheaper first step. |
 

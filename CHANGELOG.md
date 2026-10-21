@@ -5,6 +5,7 @@ Notable changes to this project. The format follows [Keep a Changelog](https://k
 ## [Unreleased]
 
 ### Added
+- **Vision cost control (milestone 9):** one description now serves many Jev decisions. The station asks the vision AI again only when there is no description, the rover has moved 14 steps (a turn counts as 6), the description is 12 s old, something within 60 cm is 20 cm closer, or Jev was unsure on an older view. A run makes at most `VISION_MAX_CALLS` live descriptions (default 6, pre-flight and failed/rate-limited attempts included), and the safety gate refuses **forward** on a description older than 20 s or 24 steps (turns and reverse stay allowed at the gate). If the budget is spent and the view is stale, or no description succeeds for 60 s, the station stops the rover and ends the run cleanly instead of waiting forever. Mission control now shows how many vision calls were used and how many are left, plus when the budget is spent or the run gave up.
 - **The example settings now match the floor-tested hardware:** Gemini 3.5 Flash, a 30 s vision timeout, a 20 s scene window, full power (255) and 500 ms chained pulses. The old `170`/`300` example only beeped the 2–3 kg rover; the old Lite model took 19–50 s or timed out.
 - **Pre-flight survives the rover's `/sensors/data` hiccup.** The endpoint drops a single answer for a fraction of a second every ~20 s; one bad read used to abort the whole run before it started. Pre-flight now retries three times, 0.5 s apart.
 - **The Earth Station no longer spends Jev calls it cannot use.** If the camera description or the rover readings are stale, the safety gate would veto the answer anyway, so the station sends one stop, waits, and asks Jev again only when fresh data arrives. A vision rate limit now backs off 15 s → 30 s → 60 s → 120 s instead of retrying every 5 s (which kept the free-tier quota saturated), and a spent `JEV_MAX_CALLS` budget ends the run immediately even if the scene is stale. The brief Jev reads now also states the camera's structured **open side** and **obstacle ahead** flag, so it no longer has to infer the safe direction from prose alone.
@@ -45,6 +46,10 @@ Notable changes to this project. The format follows [Keep a Changelog](https://k
 
 ### Removed
 - n8n AI workflow (`workflows/`) and the web dashboard (`dashboard/`).
+
+### Fixed
+- **The mission control page no longer shows a blank or `-1 cm` distance when the ultrasonic has no echo.** `distance_cm: -1` means "nothing within ~2 m", not a dead sensor; the history table, the live decision step and the sensor box now all say "no reading".
+- **The vision rate-limit backoff now really waits 15 → 30 → 60 → 120 s.** The sleep divided the seconds value by 1000 again, so it waited 15–120 **milliseconds** and kept hammering the quota.
 
 ## [2.0] - 2026-08-20
 ### Changed

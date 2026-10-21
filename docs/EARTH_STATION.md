@@ -163,7 +163,14 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `VISION_FOCUS` | empty | Comma-separated objects the vision AI should watch out for (e.g. `cables on the floor, stairs or drops`). Added to the photo prompt for either provider |
 | `VISION_EFFORT` | `low` | Anthropic only: how hard Claude thinks: `low`, `medium`, `high`, `xhigh` or `max`. Higher is slower and costs more |
 | `VISION_TIMEOUT_S` | `30` | Give up on one photo after this many seconds (the scene goes stale and the gate stops the rover). Gemini 3.5 Flash takes 7–12 s |
-| `CAMERA_EVERY_MS` / `SCENE_MAX_AGE_MS` | `3000` / `20000` | How long to wait between photos and how old a description may be. The real photo period is this plus the describe time (7–12 s on Gemini 3.5 Flash) |
+| `VISION_MAX_CALLS` | `6` | Most real descriptions in one run, including the pre-flight photo. One description is reused for many decisions; `mock` vision is free and not counted |
+| `VISION_REFRESH_MS` | `12000` | Ask for a new description when the current one is this old (the hard forward limit is `SCENE_MAX_AGE_MS`) |
+| `VISION_REFRESH_MOVES` | `14` | ... or after this many movement steps. A turn counts as 6, so two turns plus two forward steps reach it |
+| `VISION_CLOSE_CM` | `60` | ... or when something this close is at least 20 cm closer than in the photo (a chair leg appearing) |
+| `VISION_LOST_STOP_S` | `60` | If no description succeeds for this long, stop the rover and end the run cleanly instead of waiting forever |
+| `CAMERA_EVERY_MS` | `3000` | How often the camera watcher looks. A photo is captured every time; a description is only asked for when a refresh rule says so. The real description period is this plus the describe time (7–12 s on Gemini 3.5 Flash) |
+| `SCENE_MAX_AGE_MS` | `20000` | Hard limit: refuse to drive **forward** on a description older than this. Turns and reverse are still allowed by the gate |
+| `SCENE_MAX_MOVES` | `24` | Hard limit: refuse to drive forward after this many movement steps on one description (a turn counts as 6) |
 | `DECIDE_EVERY_MS` | `50` | How long to wait after each Jev answer. `50` chains the 500 ms move pulses (continuous motion); `500` halves the Jev spend but makes the rover stop-start |
 | `JEV_MAX_CALLS` | `20` | Most real Jev calls in one run (pre-flight included). Then the station stops the rover and ends the run. Only counts with `JEV_MODE=live` |
 | `MIN_CONFIDENCE` | `0.60` | Below this, the gate sends `stop` |
@@ -171,7 +178,7 @@ Every setting has a working default for the simulator. See `.env.example` for th
 | `GOAL` | `explore the room safely` | Put into every message Jev reads |
 | `MISSION_CONTROL_PORT` | `8000` | Port of the mission control page, `http://127.0.0.1:<port>` |
 
-Gemini's free tier is **20 requests/day per project per model** (measured 2026-10-20). A pre-flight plus a 10-call drive can use it up; for a longer vision drive, enable billing or use `DESCRIBE_MODE=mock`.
+Gemini's free tier is **20 requests/day per model** (measured 2026-10-20). A pre-flight plus a 10-call drive can use it up; `VISION_MAX_CALLS=6` caps a run at 6 (pre-flight included), and the station reuses the last description for every decision in between. For a longer vision drive, enable billing or use `DESCRIBE_MODE=mock`.
 
 Keys live only in `.env`, which is git-ignored. Never put them in code.
 
@@ -180,7 +187,7 @@ Keys live only in `.env`, which is git-ignored. Never put them in code.
 ```mermaid
 flowchart LR
   R["Rover /sensors/data"] -->|every 0.2 s| SR["Sensor reader"]
-  C["Camera /capture"] -->|every 1.5 s| CW["Camera watcher + describe"]
+  C["Camera /capture"] -->|"every CAMERA_EVERY_MS"| CW["Camera watcher: describe only when due"]
   SR --> WB[("Whiteboard")]
   CW --> WB
   WB --> DM["Decision maker: words -> Jev -> safety gate"]
@@ -193,27 +200,46 @@ flowchart LR
 | File | Job |
 |---|---|
 | `earth_station/__main__.py` | Command line, pre-flight, clean shutdown |
-| `earth_station/station.py` | The workers and the decision cycle |
+| `earth_station/station.py` | The workers and the decision cycle, including the vision budget and clean stop |
 | `earth_station/whiteboard.py` | Shared notebook, with a timestamp on every value |
 | `earth_station/links.py` | HTTP to the rover and camera |
 | `earth_station/describe.py` | Photo → short description (Gemini or Claude vision, or the mock) |
+| `earth_station/vision_policy.py` | When a new description is worth a vision call, and when one is too old to drive forward |
 | `earth_station/state_text.py` | Numbers → plain words for Jev |
 | `earth_station/jev_client.py` | Jev API client, plus the mock policy |
-| `earth_station/safety_gate.py` | The six laptop-side safety rules |
+| `earth_station/safety_gate.py` | The laptop-side safety rules |
 | `earth_station/logger.py` | Console output and the JSONL run log |
 | `earth_station/mission_control.py` | Serves the mission control page; STOP and Resume |
 | `earth_station/mission_control.html` | The page itself (no internet needed) |
 | `earth_station/sim.py` | Fake rover and camera |
 | `earth_station/drive.py` | Send one move by hand |
 
+### Vision cost control
+
+A description costs quota or money; a Jev decision is cheap and happens every 50 ms. One description therefore serves many decisions, and the station asks the vision AI for a new one only when:
+
+* there is no description yet (the pre-flight photo),
+* the rover moved `VISION_REFRESH_MOVES` steps since the photo (a turn counts as 6),
+* the description is `VISION_REFRESH_MS` old,
+* something within `VISION_CLOSE_CM` is at least 20 cm closer than in the photo,
+* Jev was unsure (below `MIN_CONFIDENCE`) on an older description.
+
+Every live attempt counts against `VISION_MAX_CALLS`, including the pre-flight photo, timeouts and rate-limited attempts, because those may still use quota. When the budget is spent the station keeps driving on the last description; the hard limits above then stop it if that description gets too old. It ends the run cleanly — it stops the rover and prints why — instead of waiting forever. The same clean stop happens after `VISION_LOST_STOP_S` without a successful description.
+
+Mission control shows `Vision calls: X used, Y left of Z` and warns when the budget is spent or the run gives up. With `DESCRIBE_MODE=mock` it shows `off (Jev drives on the sensors only)`.
+
 ### Safety gate rules
 
+The rules, in order:
+
 1. Only drive when the rover reports `mode: "jev"`. Otherwise send nothing.
-2. Telemetry older than 0.5 s, or a scene older than 3 s, means `stop`.
-3. Jev under `MIN_CONFIDENCE` means `stop`.
-4. Jev chooses `forward` but itself says the path is blocked: `stop`.
-5. Speed is capped at `MAX_SPEED`, and each move lasts `MOVE_MS` (max 500).
-6. Any error (Jev, camera or rover) means `stop`.
+2. Telemetry older than `TELEMETRY_MAX_AGE_MS` means `stop`.
+3. **Forward** with a description older than `SCENE_MAX_AGE_MS`, or more than `SCENE_MAX_MOVES` steps since the photo, means `stop` (`camera description too old` / `camera view is out of date`). Turns and reverse are still allowed at the gate. While the view is stale the station also stops asking Jev, so the rover waits rather than drives blind.
+4. Jev under `MIN_CONFIDENCE` means `stop`.
+5. Jev chooses `forward` but itself says the path is blocked: `stop`.
+6. Jev chooses `stop`: the rover stops (approved).
+7. Speed is capped at `MAX_SPEED`, and each move lasts `MOVE_MS` (max 500).
+8. Any error (Jev, camera or rover) means `stop`.
 
 The rover has its own second layer: the obstacle and tilt vetoes, and the watchdog.
 

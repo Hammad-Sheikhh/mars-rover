@@ -16,8 +16,8 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover (ESP32): driving, sensors, own WiFi control page | ✅ Works |
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
-| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **20 Oct: 30-call run (26 approved forward moves, ~1 m+, 3 gate stops, 0 collisions) and a 200-call run (199 decisions, 197 sent, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out).** The 200-call run ended 104 cm from the office chair. **Vision is now the cost bottleneck:** a second 200-call attempt hit Gemini's 20/day quota after 30 decisions and the station waited forever; milestone 9 fixes it |
-| Vision cost control (reuse descriptions, 6-call budget, clean stop) | ⏳ **Next: milestone 9.** Vision costs more per call than Jev; the 200-call run used ~13–15 descriptions and exhausted the free quota |
+| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **20 Oct: 30-call run (26 approved forward moves, ~1 m+, 3 gate stops, 0 collisions) and a 200-call run (199 decisions, 197 sent, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out).** The 200-call run ended 104 cm from the office chair. **21 Oct: milestone 9 built** — descriptions are reused, live vision is capped at 6 per run, and the station stops cleanly when vision is gone |
+| Vision cost control (reuse descriptions, 6-call budget, clean stop) | ✅ Milestone 9 built 21 Oct: one description lasts until 14 steps / 12 s / something close / Jev unsure; at most 6 live descriptions per run (pre-flight included); forward refused past 20 s or 24 steps; clean stop after 60 s without vision. 146 tests pass; awaits a real run |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–9 |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
@@ -47,7 +47,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **Photo descriptions use `claude-opus-5-5` at effort `low`** (2026-10-06), with a fixed answer form (structured output). Both are settings in `.env` (`VISION_MODEL`, `VISION_EFFORT`). *Why:* low effort keeps each answer quick and cheap.
 - **No paid photo descriptions for now** (2026-10-06). The Claude API costs roughly $15–25 per hour of driving on the default model, which we can't afford now. `DESCRIBE_MODE` stays `mock`, and Jev drives on the distance and tilt sensors. *Why:* the rover's own safety rules already stop it before it hits things. A free option (a vision AI running on the laptop, or simple image rules) can come later. Jev's $5 is affordable and will come later.
 - **Photo descriptions run on Gemini's free tier** (2026-10-20). New `VISION_PROVIDER` setting: `gemini` (free key from Google AI Studio, one photo every ~5 s) or `anthropic` (the old paid Claude path, kept working). `VISION_FOCUS` names the objects that matter. *Why:* Jev only needs a short, honest description; the free tier makes it $0, and enabling billing later changes nothing in the code.
-- **Vision calls are budgeted separately from Jev** (2026-10-21). Vision costs more per call than Jev, so one description must serve many decisions. Target: at most **6 live descriptions per 200-call run**, refreshed only when the rover has moved, an obstacle is close, the scene is stale, or Jev is unsure. If vision is unavailable for 60 s, the run stops cleanly. *Why:* the 200-call run used ~13–15 descriptions and exhausted Gemini's 20/day free quota; the next attempt then waited forever for vision. Jev credits are not the bottleneck.
+- **Vision calls are budgeted separately from Jev, and one description is reused** (2026-10-21). Vision costs more per call than Jev, so the station describes again only when there is no description, the rover moved 14 steps (a turn counts as 6), the description is 12 s old, something within 60 cm got 20 cm closer, or Jev was unsure. A run makes at most **6** live descriptions (pre-flight included); the gate refuses forward on a view older than 20 s or 24 steps (turns and reverse stay allowed); and the run stops cleanly when the budget is spent with a stale view, or after 60 s without a description. *Why:* the 200-call run used ~13–15 descriptions and exhausted Gemini's 20/day free quota; the next attempt then waited forever. Jev credits are not the bottleneck.
 - **Commit early and often, theme-wise** (2026-10-20), a standing rule now in `CLAUDE.md` and `CONTRIBUTING.md`. *Why:* many small, themed commits are easier to review, revert and understand than one big one.
 - **Jev spending guard** (2026-10-06): each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and ends. `--sim` uses the pretend Jev unless you add `--live-jev`. Tests never call the real Jev. *Why:* credits cost money, and the leader wants very careful use while we build.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
@@ -58,7 +58,7 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct, including the 30-call and 200-call runs.** The 200-call run made 199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out. **Next: milestone 9 — vision cost control.** Reuse one description, refresh only when needed, cap at 6 descriptions per run, and stop cleanly after 60 s without vision. No board flash is needed for this (it is Python-only).
+1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct, including the 30-call and 200-call runs.** The 200-call run made 199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out. ~~Milestone 9 — vision cost control.~~ **Built 21 Oct** on `feat/station-vision-budget` (stacked on PR #32): reuse one description, refresh only when needed, cap at 6 per run, stop cleanly after 60 s without vision. **Next: merge PR #32, then the milestone-9 PR, then run a real 200-call drive with the new budget and review the log.** No board flash is needed (Python-only).
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
 3. ~~Later: a free way for the camera to help Jev~~ **Built, live-tested, and mounted on the rover.** The free tier is **20 requests/day per project per model**; the 200-call run used ~13–15 descriptions and exhausted it. The next attempt then hung waiting for vision. Milestone 9 makes vision cheap and bounded. Options remain billing, a new project/key, later a local model, or `DESCRIBE_MODE=mock` for sensor-only tests.
 4. **When firmware changes next, flash each board separately** (`rover1`, then `cam1`). The current boards are rover **2.5.5** and camera **2.2.0**; no flash was done in the last sessions, and the vision work does not need one.
@@ -66,6 +66,30 @@ The full build order is in `SPEC.md` section 6.
 ---
 
 ## Session log
+
+### 2026-10-21 — Session 19: vision cost control (milestone 9)
+
+**What we did**
+
+1. **Built milestone 9** on `feat/station-vision-budget`, stacked on `fix/station-vision-resilience` (PR #32) because the resilience work is its base.
+2. **One description now serves many decisions.** New `earth_station/vision_policy.py` decides when a photo is worth another call: no description yet, the rover moved `VISION_REFRESH_MOVES` (14) steps, the description is `VISION_REFRESH_MS` (12 s) old, something within `VISION_CLOSE_CM` (60 cm) got 20 cm closer, or Jev was unsure. A turn counts as 6 steps, because it changes what the camera sees.
+3. **A hard budget and a clean stop.** Every live attempt counts against `VISION_MAX_CALLS` (default 6), including the pre-flight photo and failed/rate-limited attempts, because those may still use quota. When the budget is spent the station keeps driving on the last description; if that gets stale it stops the rover and ends the run. The same clean stop happens after `VISION_LOST_STOP_S` (60 s) without a successful description — no more waiting forever on a 429.
+4. **The safety gate now only vetoes forward on an old view** (`SCENE_MAX_AGE_MS` 20 s, `SCENE_MAX_MOVES` 24). Turns and reverse are still allowed by the gate; the station also holds Jev calls while the view is stale, so it never pays for an answer it may have to throw away. This fixed the session-18 hang.
+5. **Mission control shows the vision budget:** `Vision calls: X used, Y left of Z` (or `off` in mock mode), plus badges when the budget is spent or the run gave up.
+6. **Found and fixed a real bug in the session-18 backoff.** The log said "waiting 15 s" but the sleep divided the seconds by 1000 again, so it waited **15 ms** and hammered the quota. The new clean-stop test caught it: the test expected 2 attempts and saw 5. It now sleeps 15 → 30 → 60 → 120 s for real.
+7. **The dashboard now says "no reading" for a missing ultrasonic echo.** The rover sends `distance_cm: -1` when the HC-SR04 gets no echo within 12 ms (~2 m). The history table used to show a blank (its parser only matched digits), and the sensor box showed `-1 cm`. All three places now say "no reading". This is not a sensor fault; see "Things to remember".
+8. **Tests and checks:** new `tests/test_vision_budget.py` (a 200-decision simulator run with a refresh wanted after every move uses exactly 6 descriptions; a stationary run uses only the pre-flight one; both clean stops; the run waits for the last allowed description while it is in flight), forward-vs-turn gate tests, mission-control snapshot/page tests. **146 tests pass, ruff clean.** A 251-decision simulator run (`DESCRIBE_MODE=mock`) ran without errors; mission control showed the vision block.
+9. **Docs:** `.env.example`, `README.md` (status, features, Quick Start D), `docs/EARTH_STATION.md` (settings, vision-cost section, safety rules), `SPEC.md` (D6, milestone 9), `CHANGELOG.md` and this diary.
+10. **No flashing.** This is Python-only; the rover stays on 2.5.5 and the camera on 2.2.0.
+
+**Things to remember**
+
+- **`distance_cm: -1` means "no echo within ~2 m", not "sensor dead".** The firmware takes three HC-SR04 readings and keeps the median; a soft, angled or low object can miss the cone, and anything past ~2 m is out of range. A dash/blank on the page is the UI's old way of showing that.
+- **If the distance stays "no reading" with a wall 30–50 cm ahead, check the sensor.** TRIG is GPIO 32, ECHO is GPIO 35, and the module needs 5 V and a shared ground. A single missed echo is normal; a permanent one is wiring or a dead module.
+- **When the distance is unknown, the rover's 20 cm forward veto cannot fire** (`lastDistanceCm > 0` guard). The station's gate and the camera are then the only forward guard, which is exactly why the gate stopping at 60% confidence is healthy.
+- **The blank distance and the 60% gate stops are related but not a fault.** Jev is less sure when it has no distance reading; 0.58/0.59 is just under the 0.60 floor, so the gate stops. That is the system refusing to drive on a guess.
+- **PR #32 must merge before the milestone-9 PR.** The milestone-9 branch is stacked on it; merging #32 first keeps the diff honest.
+- **The next real run is the acceptance test:** 200 Jev calls with `DESCRIBE_MODE=live`, expect ≤6 live descriptions, and confirm the run ends cleanly if the quota is already gone.
 
 ### 2026-10-21 — Session 18: the 200-call run and the vision bill
 
