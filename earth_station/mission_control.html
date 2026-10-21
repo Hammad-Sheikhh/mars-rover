@@ -228,6 +228,7 @@
       <div class="row"><span>Stopped by the safety gate</span><span id="ngate">–</span></div>
       <div class="row"><span>Refused by the rover</span><span id="nrefused">–</span></div>
       <div class="row"><span>Jev calls</span><span id="calls">–</span></div>
+      <div class="row"><span>Vision calls</span><span id="vision">–</span></div>
       <div class="row"><span>Log file</span><span id="log" class="muted">–</span></div>
     </section>
   </div>
@@ -273,6 +274,9 @@ function plainReason(reason) {
   }
   if (reason === "telemetry too old") return "The sensor readings were too old to trust.";
   if (reason === "camera description too old") return "The camera description was too old to trust.";
+  if (reason === "camera view is out of date") {
+    return "The rover has moved too far since the camera description to trust it for another forward move.";
+  }
   if (reason === "no answer from Jev") return "Jev gave no answer (an error, or the call limit was reached).";
   if (reason === "Jev says path blocked but chose forward") {
     return "Jev said the way looks blocked, yet chose forward. That doesn't add up, so: stop.";
@@ -329,6 +333,8 @@ function render(s) {
   let run = ["driving", "ok"];
   if (s.paused) run = ["paused", "bad"];
   else if (s.jev.budget_spent) run = ["Jev limit reached", "bad"];
+  else if (s.vision && s.vision.gave_up) run = ["vision stopped the run", "bad"];
+  else if (s.vision && s.vision.budget_spent) run = ["vision budget used", "warn"];
   else if (s.suggest_only) run = ["suggest only", "warn"];
   else if (mode !== "jev") run = ["waiting for Jev Auto", "warn"];
   set("run", run[0], `badge ${run[1]}`);
@@ -346,7 +352,7 @@ function render(s) {
   const [dWord, dCls] = distanceWords(cm);
 
   // 1. sees
-  step(1, cm == null ? "no reading" : `${Math.round(cm)} cm ahead`,
+  step(1, cm == null || cm < 0 ? "no distance reading" : `${Math.round(cm)} cm ahead`,
        `${dWord}. ${sc.summary || ""}`, dCls);
   const safe = limits.safe_distance_cm;
   $("gauge").style.setProperty("--d1", `${(safe / 2 / GAUGE_MAX) * 100}%`);
@@ -380,10 +386,11 @@ function render(s) {
   let story;
   if (s.paused) story = "You pressed STOP. The rover is standing still and Jev is paused.";
   else if (s.jev.budget_spent) story = "Jev's call limit for this run is used up, so the rover was stopped and the run is ending.";
+  else if (s.vision && s.vision.gave_up) story = "No new camera description could be had, so the station stopped the rover and ended the run cleanly.";
   else if (mode !== "jev") story = "The rover isn't in Jev Auto mode yet, so Jev can't drive it.";
   else if (!last) story = "Waiting for Jev's first decision…";
   else if (last.approved && last.sent && last.sent !== "stop") {
-    story = `The way ahead is ${dWord}${cm != null ? ` (${Math.round(cm)} cm)` : ""}, so Jev chose ` +
+    story = `The way ahead is ${dWord}${cm != null && cm >= 0 ? ` (${Math.round(cm)} cm)` : ""}, so Jev chose ` +
             `${words(last.action)} and the rover is ${DOING[last.sent].toLowerCase()}.`;
   } else if (last.approved) story = "Jev chose to stop, so the rover is standing still.";
   else story = `The safety gate stopped the rover: ${plainReason(last.reason)}`;
@@ -401,10 +408,14 @@ function render(s) {
   }
   for (const d of hist) {
     const [label, cls] = outcome(d);
-    const dist = (d.told_jev || "").match(/Distance ahead: (\d+) cm/);
+    const told = d.told_jev || "";
+    const dist = told.match(/Distance ahead: (\d+) cm/);
+    const distText = dist
+      ? `${dist[1]} cm`
+      : told.includes("no ultrasonic reading") ? "no reading" : "–";
     const cells = [
       clock(d.t),
-      dist ? `${dist[1]} cm` : "–",
+      distText,
       d.action ? `${ICON[d.action] || ""} ${words(d.action)}` : "no answer",
       d.confidence != null ? pct(d.confidence) : "–",
       null,
@@ -490,7 +501,12 @@ function render(s) {
     const cell = document.createElement("div");
     cell.className = "sensor";
     const v = document.createElement("b");
-    v.textContent = `${t[key]}${unit && typeof t[key] === "number" ? " " + unit : ""}`;
+    const raw = t[key];
+    if (key === "distance_cm" && typeof raw === "number" && raw < 0) {
+      v.textContent = "no reading";
+    } else {
+      v.textContent = `${raw}${unit && typeof raw === "number" ? " " + unit : ""}`;
+    }
     if (key === "last_event") v.style.fontSize = "14px";
     const l = document.createElement("span");
     l.textContent = label;
@@ -505,6 +521,13 @@ function render(s) {
   set("ngate", s.stats.stopped_by_gate);
   set("nrefused", s.stats.refused);
   set("calls", s.jev.mode === "live" ? `${s.jev.calls} of ${s.jev.max_calls} (real, costs credits)` : "pretend Jev (free)");
+  const v = s.vision || { mode: "mock", calls: 0, max_calls: 0 };
+  if (v.mode !== "live") {
+    set("vision", "off (Jev drives on the sensors only)");
+  } else {
+    const left = Math.max(0, v.max_calls - v.calls);
+    set("vision", `${v.calls} used, ${left} left of ${v.max_calls} (real, uses quota)`);
+  }
   set("log", s.log, "muted");
 }
 
