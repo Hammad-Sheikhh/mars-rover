@@ -45,13 +45,18 @@ FALLBACK_MODELS = ("claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "clau
 
 PROMPT = """You are the eyes of a small wheeled rover. This photo is from its \
 front camera, about 10 cm above the floor. A driver who cannot see the photo \
-decides the next move from your answer alone.
+decides the next move from your answer alone. The rover is small: about 15 cm \
+wide and 20 cm tall, so it fits through gaps a person would step over.
 
 Reply with:
 - summary: one or two short sentences (under 200 characters). Say what is \
 directly ahead and roughly how far, then which way looks open.
-- obstacle_ahead: true if something would block the rover within about 1 metre \
-straight ahead.
+- obstacle_ahead: true only if the rover physically CANNOT pass on the floor \
+straight ahead within about 1 metre: a wall, a table or chair leg in its path, \
+a drop or step, or furniture standing on the floor across its path. A gap about \
+25 cm wide or wider is passable, and so is floor you can see under or around an \
+object - set false for those, and say in the summary that the way through is \
+tight but open.
 - clear_side: where the rover could turn to find open floor: "left", "right", \
 "both" or "none".
 - hazards: short names of anything risky (stairs, drop, cable, liquid, pet, \

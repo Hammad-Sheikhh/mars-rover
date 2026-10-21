@@ -11,6 +11,7 @@ Mission control (mission_control.py) reads snapshot() and calls pause()/resume()
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import time
 from collections import deque
 from typing import Any
@@ -20,12 +21,22 @@ import httpx
 from . import safety_gate, state_text, vision_policy
 from .config import Settings
 from .describe import DescribeError, describe
-from .jev_client import JevBudgetError, JevClient, JevError
+from .jev_client import Decision, JevBudgetError, JevClient, JevError
 from .links import CameraLink, LinkError, RoverLink
 from .logger import Logger, paint
 from .whiteboard import Whiteboard
 
 HISTORY = 20  # recent decisions shown on mission control
+# Getting unstuck: when the rover's own 20 cm veto refuses a forward move it is
+# nosed into something, and Jev tends to alternate forward and reverse there
+# (22 Oct run: 18 cm from a stool leg, reverse at 0.48 = refused by the gate, so
+# the rover sat still). The station backs off once, then pivots about 90 degrees
+# so the camera sees a new way. Both moves are allowed with an old photo: they
+# do not translate into the unknown.
+ESCAPE_MS = 500
+ESCAPE_SETTLE_MS = 250  # time for the wheels to stop and the distance reading to settle
+ESCAPE_TURNS = 3
+ESCAPE_GIVE_UP = 3  # manoeuvres in a row without room: stop and ask the human
 VISION_BACKOFF_START_S = (
     15.0  # a 429 means "slow down": retrying every 5 s keeps the quota saturated
 )
@@ -35,6 +46,23 @@ VISION_BACKOFF_MAX_S = 120.0
 def _next_vision_backoff(current_s: float) -> float:
     """15 s after the first rate limit, then double, capped at 2 minutes."""
     return VISION_BACKOFF_START_S if current_s <= 0 else min(VISION_BACKOFF_MAX_S, current_s * 2)
+
+
+def _distance(board: Whiteboard) -> float | None:
+    """Ultrasonic distance in cm, or None when there is no usable reading (-1/no echo)."""
+    dist = (board.telemetry or {}).get("distance_cm")
+    if isinstance(dist, bool) or not isinstance(dist, (int, float)):
+        return None
+    return float(dist)
+
+
+def _cm(value: float | None) -> str:
+    return "no reading" if value is None else f"{value:.0f} cm"
+
+
+def _forward_blocked_by_distance(gate: safety_gate.GateResult) -> bool:
+    """True when the gate stopped a forward move because the gap is too small."""
+    return bool(gate.command and gate.command["action"] == "stop" and "cm ahead" in gate.reason)
 
 
 class Station:
@@ -59,6 +87,11 @@ class Station:
         self.last_vision_reason: str | None = None  # why the last photo was described
         self.last_vision_error: str | None = None
         self.vision_in_flight = False  # the last allowed description may still arrive
+        # Moves left in an unstick manoeuvre (reverse once, then pivot). Empty is normal.
+        self._escape_phase: str | None = None  # None | "reverse" | "check" | "turns"
+        self._escape_steps: list[str] = []
+        self._escape_dist_before: float | None = None
+        self._escapes_without_room = 0
 
     # ---------- pre-flight ----------
     async def _read_rover_with_retry(self, attempts: int = 3) -> dict[str, Any]:
@@ -313,18 +346,30 @@ class Station:
     async def decide_once(self) -> None:
         board, stats = self.board, self.board.stats
         state = state_text.build(board, self.s)
-        try:
-            decision = await self.jev.ask(state, board)
-            self._clear_error("jev")
-        except JevBudgetError as e:
-            self._error("jev", str(e))
-            self.jev_budget_spent = True
-            decision = None  # the gate turns this into a stop
-        except JevError as e:
-            self._error("jev", str(e))
-            decision = None
+        escape_action: str | None = None
+        if self._escape_phase is not None:
+            escape_action = self._next_escape_step(board)
+        if escape_action:
+            # Unstick: no Jev call is spent on a move the station already knows.
+            decision: Decision | None = Decision(
+                escape_action, 0.95, {escape_action: 0.95}, None, 0.0
+            )
+            state = f"Recovery: {escape_action} to get clear of the obstacle.\n" + state
+        else:
+            try:
+                decision = await self.jev.ask(state, board)
+                self._clear_error("jev")
+            except JevBudgetError as e:
+                self._error("jev", str(e))
+                self.jev_budget_spent = True
+                decision = None  # the gate turns this into a stop
+            except JevError as e:
+                self._error("jev", str(e))
+                decision = None
 
         gate = safety_gate.check(decision, board, self.s)
+        if escape_action and gate.approved and gate.command:
+            gate = dataclasses.replace(gate, command={**gate.command, "duration_ms": ESCAPE_MS})
         if decision is not None and decision.confidence < self.s.min_confidence:
             board.note_unsure()
         reply = None
@@ -341,8 +386,27 @@ class Station:
                     board.note_move(sent)
                 else:
                     stats["refused"] += 1
+                    if reply.get("refused") == "obstacle_too_close" and self._escape_phase is None:
+                        self._plan_escape(board)
             except LinkError as e:
                 self._error("rover-cmd", str(e))
+            # The gate may already refuse forward inside SAFE_DISTANCE_CM, in which
+            # case the rover never gets the chance to refuse it: start the same
+            # unstick manoeuvre instead of sitting there.
+            if (
+                self._escape_phase is None
+                and not self.paused
+                and decision is not None
+                and decision.action == "forward"
+                and _forward_blocked_by_distance(gate)
+            ):
+                self._plan_escape(board)
+            if escape_action and sent:
+                # Let the move finish before the next step: a new /jev/cmd replaces
+                # the running move, so three turns sent 90 ms apart turned the
+                # wheels for 270 ms in total, and the distance was measured
+                # before the rover had moved at all (37 cm -> 37 cm at once).
+                await asyncio.sleep((ESCAPE_MS + ESCAPE_SETTLE_MS) / 1000)
         stats["decisions"] += 1
         if gate.command and not gate.approved:
             stats["stopped_by_gate"] += 1
@@ -359,6 +423,68 @@ class Station:
             "t": time.time(),
         }
         self.history.append(self.last)
+
+    def _next_escape_step(self, board: Whiteboard) -> str | None:
+        """The next unstick move, or None when the manoeuvre is over.
+
+        Order: reverse once, then measure. If reversing won `ESCAPE_GAIN_CM` of
+        room the rover is free again and Jev gets the next decision back. If the
+        distance did not change (something low or thin that the wheels catch,
+        or a wall behind), pivoting is the only way out, so turn `ESCAPE_TURNS`
+        steps - about 90 degrees - and let the camera see somewhere new.
+        """
+        if self._escape_phase == "check":
+            before = self._escape_dist_before
+            after = _distance(board)
+            if after is not None and after >= self.s.safe_distance_cm:
+                # Enough room to drive on: hand the next decision back to Jev.
+                self._escape_phase = None
+                self._escapes_without_room = 0
+                self.log.info(
+                    f"recovery: reversing gained room ({_cm(before)} -> {_cm(after)}), "
+                    "handing back to Jev",
+                    "green",
+                )
+                return None
+            side = (board.scene or {}).get("clear_side")
+            turn = "turn_left" if side == "left" else "turn_right"
+            self._escape_steps = [turn] * ESCAPE_TURNS
+            self._escape_phase = "turns"
+            self.log.info(
+                f"recovery: reversing did not gain room "
+                f"({_cm(before)} -> {_cm(after)}), pivoting {ESCAPE_TURNS} steps ({turn})",
+                "yellow",
+            )
+            return self._next_escape_step(board)
+
+        if self._escape_steps:
+            action = self._escape_steps.pop(0)
+            if not self._escape_steps:
+                self._escape_phase = "check" if self._escape_phase == "reverse" else None
+            return action
+        self._escape_phase = None
+        return None
+
+    def _plan_escape(self, board: Whiteboard) -> None:
+        """Not enough room ahead: back off once, then let the check decide."""
+        if self._escapes_without_room >= ESCAPE_GIVE_UP:
+            self._escape_steps = []
+            self._escape_phase = None
+            self.log.info(
+                "recovery: no room in any direction after "
+                f"{self._escapes_without_room} tries; stopping so the rover does not "
+                "shuffle against the furniture (move it by hand or point it somewhere open)",
+                "red",
+            )
+            return
+        self._escapes_without_room += 1
+        self._escape_phase = "reverse"
+        self._escape_steps = ["reverse"]
+        self._escape_dist_before = _distance(board)
+        self.log.info(
+            "recovery: not enough room ahead, so back off and measure the room",
+            "yellow",
+        )
 
     # ---------- mission control ----------
     async def pause(self) -> None:

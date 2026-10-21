@@ -51,6 +51,7 @@ graph TD
 | Photo descriptions with Gemini vision (`describe.py`) | ✅ Merged + live-tested with a free Gemini key (2.4 s). Free tier is **20 requests/day per model**, so long drives need billing or `DESCRIBE_MODE=mock` (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
 | Vision cost control (reuse descriptions, 6-call budget) | ✅ Merged (PR #33, 21 Oct 2026): one description is reused until the rover moves 14 steps, 12 s pass, something close gets closer, or Jev is unsure. At most 6 live descriptions per run (pre-flight included) — a 200-decision simulator run with a worst-case refresh every move used exactly 6, and a normal run uses far fewer. If vision is rate-limited or gone, the station stops cleanly after 60 s instead of waiting ([SPEC.md](SPEC.md) milestone 9) |
 | Camera + vision bench (`bench.py`) | ✅ Merged: `python -m earth_station.bench` scores the photo pipeline (smoke / stamina / ground-truth probes / rate-limit burst) before the camera goes on the rover |
+| Real-drive tuning (22 Oct 2026) | ✅ Found and fixed the biggest drive problem: the brief carried a phantom `Tilt Warning` on **164 of 171** decisions, so Jev hedged and the gate stopped 90 of 196 forwards (rocking, no turning). After the fix: confidence 0.82–0.97 and 33 forwards in a row. Added a **45 cm forward floor**, reverse allowed when unsure and close, a **reverse → measure → pivot ~90° unstick manoeuvre**, and a vision prompt that knows the rover fits through a 25 cm gap. 159 tests pass. The next live-vision run waits for tomorrow's Gemini quota |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
 | Camera name `cam.local` and `/id` (firmware 2.1) | ✅ Hardware-tested: found by name on the hotspot, `/id` answered, photo uploads flow ([SPEC.md](SPEC.md) milestone 4) |
@@ -80,6 +81,9 @@ graph TD
 
 ### 🛰 Earth Station (`earth_station/`)
 *   **Jev Auto**: twice a second, reads telemetry, reads the latest camera description, asks Jev for the next move and sends it to the rover.
+*   **Keeps a real gap**: forward is refused when the ultrasonic reads less than `SAFE_DISTANCE_CM` (45 cm), not just at the rover's own 20 cm emergency veto. A negative distance means "no echo within ~2 m", so open floor stays drivable.
+*   **Gets itself unstuck**: when forward is refused with no room, the station backs off 500 ms, measures again, and if the gap did not improve pivots about 90° toward the open side to find another way. After three tries without room it stops and asks for a hand.
+*   **Honest briefs**: a `Tilt Warning` reaches Jev only when the rover is really tilted, so a single wheel bump can no longer make it hedge.
 *   **Two safety layers**: laptop-side gate (confidence, stale data, blocked path) plus the rover's own reflexes and watchdog.
 *   **Runs anywhere**: built-in simulator and mock Jev, so it works on any laptop with no hardware or keys.
 *   **Real Jev**: set `JEV_MODE=live` and your key in `.env` to let TypeSafe's Jev make the decisions. Add `--live-jev` to use it with the simulator.

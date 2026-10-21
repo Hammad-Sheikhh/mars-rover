@@ -40,10 +40,49 @@ def test_unsure_jev_means_stop(settings):
     assert not r.approved and r.command["action"] == "stop"
 
 
+def test_unsure_reverse_is_allowed_when_something_is_close(settings):
+    """Backing off adds clearance, so the confidence floor does not block it.
+
+    22 Oct: reverse 0.48 at 18 cm left the rover pinned against a stool leg.
+    """
+    r = safety_gate.check(decision("reverse", confidence=0.48), board_in_jev(distance=18), settings)
+    assert r.approved and r.command["action"] == "reverse"
+    assert "reversing away" in r.reason
+
+
+def test_unsure_reverse_far_from_anything_still_stops(settings):
+    r = safety_gate.check(
+        decision("reverse", confidence=0.48), board_in_jev(distance=120), settings
+    )
+    assert not r.approved and r.command["action"] == "stop"
+
+
+def test_unsure_forward_and_turn_are_still_stopped_when_close(settings):
+    for action in ("forward", "turn_left", "turn_right"):
+        r = safety_gate.check(decision(action, confidence=0.5), board_in_jev(distance=18), settings)
+        assert not r.approved, action
+        assert r.command["action"] == "stop", action
+
+
 def test_forward_into_flagged_obstacle_means_stop(settings):
     r = safety_gate.check(decision("forward", blocked=0.9), board_in_jev(), settings)
     assert r.command["action"] == "stop"
-    assert "blocked" in r.reason
+
+
+def test_forward_is_refused_inside_the_safe_distance(settings):
+    """Keep a real gap: the firmware veto is only 20 cm, which is too late.
+
+    22 Oct: the rover pushed into a stool at 18-36 cm because the gate approved
+    forward on Jev's guess alone.
+    """
+    r = safety_gate.check(decision("forward"), board_in_jev(distance=30), settings)
+    assert not r.approved and "safe distance" in r.reason
+    assert safety_gate.check(decision("forward"), board_in_jev(distance=120), settings).approved
+
+
+def test_no_echo_counts_as_clear_ahead(settings):
+    """distance_cm -1 means "no echo within ~2 m", so the floor ahead is open."""
+    assert safety_gate.check(decision("forward"), board_in_jev(distance=-1), settings).approved
 
 
 def test_turn_allowed_even_when_blocked(settings):

@@ -67,6 +67,40 @@ The full build order is in `SPEC.md` section 6.
 
 ## Session log
 
+### 2026-10-22 — Session 20: tuning the drive on the real rover (20 vision calls)
+
+**What we did**
+
+1. **Started with a dead IMU.** `/sensors/data` reported `i2c_ok:0`, `accX/Y/Z` all zero, pitch/roll pinned at −90/90 and `last_event: Tilt Warning`, so the firmware refused every move as "tilt". Power-cycling the rover and reseating the MPU6050 wires fixed it (`i2c_ok:1`, pitch 3°, roll −3°, `Nominal`). Same fault as session 16: it is a wiring/power problem, not software.
+2. **Found why the rover rocked back and forth instead of driving.** In the first real run of the day, **164 of 171 briefs** sent to Jev contained `Recent event: Tilt Warning` while the same brief said `Orientation: level (pitch 3 deg)`. Only 9 briefs were genuinely tilted. One wheel bump spikes the accelerometer, the firmware stamps a Tilt Warning that lasts 8 s, and Jev read a hazard on almost every decision — so it hedged (`forward 0.50 / stop 0.33 / reverse 0.10`) and the 0.60 confidence floor stopped **90 of 196** forwards. Result: rocking, no turning.
+3. **Fixed the brief (`state_text.py`).** A Tilt Warning is only passed on when the rover is really tilted now; otherwise Jev reads "a bump spiked the tilt sensor while driving; the rover is level again now". Immediately after the change the same rover read **0.82–0.97** on good moves and drove 33 forwards in a row.
+4. **Fixed Jev's move descriptions (`jev_client.py`).** Its "stop" option was the catch-all ("when unsure… or nowhere is safe"), and turning was only allowed "toward open space on the left/right", so a blocked view produced endless stops (21 in a row). Turning is now described as the way round an obstacle, and stop is reserved for "tilted, or turning and reversing are both unsafe".
+5. **Told the vision AI the rover's size (`describe.py`).** It used to call anything within 1 m "blocking", so a bed frame with a passable gap looked like a wall and Jev refused to go on. The prompt now says the rover is ~15 × 20 cm, that a gap of ~25 cm or wider is passable, and that floor visible under or around an object means the way is open.
+6. **The vision quota is the hard limit.** 20 Gemini requests/day per model: the check used 1, the first run 8, the second 4, and the rest went on retries before Gemini answered **429**. Two runs plus a check is a day's quota; plan the day's runs around that.
+7. **Safety tuning from what actually broke.**
+   - `SAFE_DISTANCE_CM=45` and the station now refuses **forward inside 45 cm** (the firmware's own veto is only 20 cm, far too late: the rover pushed into a stool twice at 18–36 cm). A negative distance still means "no echo within ~2 m", so open floor stays drivable.
+   - A **confidence floor no longer blocks reverse** when something is closer than the safe distance: backing off only adds clearance, and Jev's five-way answer often splits reverse from stop (0.48 reverse at 18 cm left the rover pinned until it was moved by hand).
+   - **New unstick manoeuvre** (`station.py`): when forward is refused by the distance rule or by the rover, back off 500 ms, then *measure*: if there is 45 cm or more now, hand back to Jev; if the room did not improve, pivot 3 steps of 500 ms (about 90°) toward the open side and let the camera see somewhere new. Each step waits for the move to finish (a new `/jev/cmd` replaces the running one — three turns sent 90 ms apart only turned the wheels for 270 ms). After three manoeuvres without room it stops and says the rover needs a hand.
+8. **The rover's web server froze once.** At 4.2 requests/s (telemetry every 0.5 s + a command every ~0.45 s) it answered `ping` but no HTTP for the rest of the run, ~18 s in. The watchdog stopped the wheels (confirmed by hand), and after a restart everything worked. Laptop side now polls telemetry every **1000 ms** and tolerates **2500 ms** staleness (was 500/1500). The real fix is in the firmware and is not written yet.
+9. **`--check` passed 12/12** at the start (boards by name, token, camera 20 KB, live description, Jev 597 ms). Tests: **159 pass**, ruff clean. New tests cover the honest tilt brief, the 45 cm forward floor, no-echo-is-clear, unsure-reverse-when-close, and the whole unstick sequence.
+10. **Nothing was flashed.** All of today's fixes are in the Earth Station (Python). The rover is still **2.5.5** and the camera **2.2.0**.
+
+**Things to remember**
+
+- **A `Tilt Warning` in the brief is only trustworthy if the orientation line says tilted.** The firmware's 8 s event window plus one accelerometer spike can otherwise dominate every decision. This was the single biggest cause of the rover "not listening" today.
+- **Jev's confidence is a five-way distribution.** 0.50 forward with 0.33 stop is a decisive answer, not doubt. Judge Jev by the shape (`path_blocked` 0.04 = "the way is clear") as well as the number.
+- **The ultrasonic cannot see thin legs, edges or dark floor.** It reported "no reading" (which means "nothing within ~2 m", not "broken") while the rover was 18 cm from a stool leg. Vision and the 45 cm floor are the real protection.
+- **`-1` / no reading ≠ blocked.** Treating it as blocked would freeze the rover in the open room; that is why the gate allows forward on a negative distance.
+- **Gemini free tier: 20 descriptions/day/model.** One `--check` plus one 2-minute run can use it all. Reserve the last few for the acceptance run, or enable billing.
+- **`i2c_recov` climbed to 6 during driving** (motor EMI on the I2C bus). It recovers each time, but a loose MPU6050 lead will always show as `i2c_ok:0` + zero accelerometer + frozen ±90° angles. Power-cycle and reseat before driving.
+- **Request budget of the rover's web server:** ~2 commands/s plus 1 telemetry/s is the new setting; 4/s hung it once. Keep `TELEMETRY_EVERY_MS` at 1000 until the firmware is fixed.
+
+**Next steps**
+
+1. **Firmware 2.6.0 (needs a flash, leader does it):** (a) reject accelerometer spikes whose magnitude is far from 1 g so a bump cannot stamp a Tilt Warning; (b) make the web server survive 4 requests/s or serve telemetry on a second core/async; (c) optionally raise `JEV_MIN_FORWARD_CM` to 35–45 cm to match the station.
+2. **First run tomorrow:** `--check` (1 vision), then one live-vision run with `VISION_MAX_CALLS=15` in an open stretch, and record how far it gets per vision call.
+3. **Add a "stuck" badge to mission control** when the station gives up after three unstick tries, so the person watching knows to step in.
+
 ### 2026-10-21 — Session 19: vision cost control (milestone 9)
 
 **What we did**

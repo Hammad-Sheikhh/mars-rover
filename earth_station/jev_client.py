@@ -46,13 +46,25 @@ class Decision:
 QUESTIONS: dict[str, Any] = {
     "next_action": {
         "type": "choice",
-        "instructions": "The safest move that still makes progress toward the goal",
+        "instructions": (
+            "The safest move that still makes progress toward the goal. If the path ahead is "
+            "blocked, turn on the spot to look for another way round; only stop when moving at "
+            "all would be unsafe"
+        ),
         "criteria": {
-            "forward": "Drive straight ahead; only when the path ahead is clear",
-            "turn_left": "Turn left on the spot, toward open space on the left",
-            "turn_right": "Turn right on the spot, toward open space on the right",
-            "reverse": "Back up; when something is very close ahead",
-            "stop": "Stay still; when unsure, tilted, or nowhere is safe",
+            "forward": "Drive straight ahead; the path ahead is clear",
+            "turn_left": (
+                "Pivot left on the spot to find a way round. Safe even close to a chair or wall, "
+                "because the rover turns without moving forward"
+            ),
+            "turn_right": (
+                "Pivot right on the spot to find a way round. Safe even close to a chair or wall, "
+                "because the rover turns without moving forward"
+            ),
+            "reverse": (
+                "Back up; when something is very close ahead or the rover needs room to turn"
+            ),
+            "stop": "Stay still; only when tilted, or when turning and reversing are both unsafe",
         },
     },
     "path_blocked": {
