@@ -24,16 +24,19 @@ def describe_distance(cm: float | None, safe_cm: int) -> str:
     return f"{cm:.0f} cm, clear (safe distance is {safe_cm} cm)"
 
 
-def describe_orientation(pitch: float | None, roll: float | None) -> str:
+def orientation_word(pitch: float | None, roll: float | None) -> str:
     if pitch is None or roll is None:
         return "unknown"
     worst = max(abs(pitch), abs(roll))
-    word = (
-        "dangerous tilt"
-        if worst > TILT_DANGER_DEG
-        else ("tilted" if worst > TILT_WARN_DEG else "level")
-    )
-    return f"{word} (pitch {pitch:.0f} deg, roll {roll:.0f} deg)"
+    if worst > TILT_DANGER_DEG:
+        return "dangerous tilt"
+    return "tilted" if worst > TILT_WARN_DEG else "level"
+
+
+def describe_orientation(pitch: float | None, roll: float | None) -> str:
+    if pitch is None or roll is None:
+        return "unknown"
+    return f"{orientation_word(pitch, roll)} (pitch {pitch:.0f} deg, roll {roll:.0f} deg)"
 
 
 def describe_terrain(vibration: float | None) -> str:
@@ -52,7 +55,18 @@ def build(board: Whiteboard, settings: Settings) -> str:
     ]
     event = t.get("last_event")
     if event and event != "Nominal":
-        lines.append(f"Recent event: {event}.")
+        # The firmware keeps an event for 8 s. A single wheel bump spikes the
+        # accelerometer, stamps "Tilt Warning", and the rover is level again
+        # 0.2 s later - but Jev then read a tilt hazard on ~96% of the
+        # decisions of the 22 Oct run (164 of 171 briefs) and hedged to
+        # forward 0.50 / stop 0.33. Only tell Jev about a tilt that is real now.
+        if event == "Tilt Warning" and orientation_word(t.get("pitch"), t.get("roll")) == "level":
+            lines.append(
+                "Recent event: a bump spiked the tilt sensor while driving; "
+                "the rover is level again now."
+            )
+        else:
+            lines.append(f"Recent event: {event}.")
 
     if board.scene:
         age = board.scene_age_ms() or 0

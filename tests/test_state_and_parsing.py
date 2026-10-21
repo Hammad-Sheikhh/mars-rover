@@ -40,8 +40,19 @@ def test_state_text_contains_conclusions_not_just_numbers(settings):
     assert "Open side: right." in text
     assert "Obstacle ahead: yes." in text
     assert "cable on floor" in text
-    assert "Tilt Warning" in text
+    # A stale "Tilt Warning" must not reach Jev while the rover is level: the
+    # firmware keeps the event for 8 s after one wheel bump (22 Oct run: 164 of
+    # 171 briefs said "Tilt Warning" while pitch was 3 deg, and Jev hedged).
+    assert "Tilt Warning" not in text
+    assert "level again now" in text
     assert settings.goal in text
+
+
+def test_real_tilt_still_reaches_jev(settings):
+    b = Whiteboard()
+    b.post_telemetry({"distance_cm": 62, "pitch": 22, "roll": -1, "last_event": "Tilt Warning"})
+    text = state_text.build(b, settings)
+    assert "Recent event: Tilt Warning." in text
 
 
 def test_state_text_says_none_when_no_side_is_open(settings):

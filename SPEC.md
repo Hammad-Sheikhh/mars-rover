@@ -96,8 +96,9 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 |---|---|
 | E1 | Three ways to run: `--sim` (all fake), `--suggest` (real boards, Jev decides but the rover never moves), normal (Jev drives). |
 | E2 | It only drives while the rover says `mode: "jev"`. Any button on the phone control page takes the rover out of Jev Auto. |
-| E3 | Safety gate rules stay as they are. Changing them needs a test that shows the new behaviour. |
+| E3 | Safety gate rules stay as they are, except the deliberate additions in E5. Changing them needs a test that shows the new behaviour. |
 | E4 | `Ctrl+C`, the STOP button, or any crash ends with a `stop` sent to the rover. |
+| E5 | **Keep a real gap and get unstuck (2026-10-22).** Forward is refused when the ultrasonic reads less than `SAFE_DISTANCE_CM` (45 cm) — the firmware's own veto is 20 cm, which is too late; a negative distance means "no echo within ~2 m" and stays drivable. `reverse` is allowed below `MIN_CONFIDENCE` when something is closer than the safe distance. When forward is refused with no room, the station reverses once, measures again, and if the gap did not improve pivots three 500 ms steps (~90°) toward the open side; after three tries without room it stops and asks for a hand. Every step waits for the move to finish before the next is sent. |
 
 ### 4.4 Mission control page
 
@@ -119,6 +120,7 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 | D4 | Test it on saved photos with no rover: `python -m earth_station.describe photo.jpg`. Keep a few sample photos in `tests/photos/` for the tests. |
 | D5 | **Live vision is optional.** `DESCRIBE_MODE=mock` stays the safe default without a key. The free Gemini tier is **20 requests/day per model** (measured 20 Oct 2026), so live vision must be budgeted (D6). A real photo in `mock` mode must tell Jev honestly that there is no camera vision, and never claim the way is clear. |
 | D6 | **Cost guard (2026-10-21):** one description is reused for many Jev decisions. Refresh only when needed: the first frame, the rover has moved `VISION_REFRESH_MOVES` (14) steps, the description is older than `VISION_REFRESH_MS` (12 s), something within `VISION_CLOSE_CM` (60 cm) is 20 cm closer, or Jev was unsure. Hard forward limits: `SCENE_MAX_AGE_MS` (20 s) and `SCENE_MAX_MOVES` (24); turns and reverse stay allowed. A run makes at most `VISION_MAX_CALLS` live descriptions (default **6**, pre-flight included). If no description succeeds for `VISION_LOST_STOP_S` (default 60 s), or the budget is spent and the view is stale, the run stops cleanly instead of waiting forever. |
+| D7 | **The prompt knows the rover (2026-10-22).** It states the rover is about 15 cm wide and 20 cm tall, that a gap about 25 cm or wider is passable, and that floor visible under or around an object means the way is open. "Blocked within 1 m" made every passable gap look like a wall, and Jev then refused to move. |
 
 ### 4.6 Jev
 
@@ -141,12 +143,14 @@ The full contract is in [docs/EARTH_STATION.md → Rover protocol](docs/EARTH_ST
 | R4 | Watchdog: in Jev Auto, no command for 1.5 s means stop. |
 | R5 | No `delay()` in the Jev Auto path. Moves are timed with `millis()`, so the rover keeps answering. |
 | R6 | `rover.local` name and `GET /id` (N3, N4). |
+| R7 | **Firmware 2.6.0 (next flash):** ignore accelerometer samples whose magnitude is far from 1 g, so one wheel bump cannot stamp a `Tilt Warning` (the station now hides stale warnings, but the firmware should not create them). |
+| R8 | **Firmware 2.6.0:** the web server must survive the station's request rate. On 22 Oct it stopped answering HTTP for the rest of a run after ~18 s at ~4.2 requests/s (telemetry every 0.5 s plus a command every ~0.45 s) while still answering ping; the watchdog stopped the wheels. Until then the station polls telemetry every 1000 ms. |
 
 The camera needs only N3, N4 and N5. Its `/capture` endpoint already does what we need.
 
 ## 5. Setup procedure (the target)
 
-This is how setup looks today, with milestones 1–9 done. The README always shows the steps that work *today*.
+This is how setup looks today, with milestones 1–10 done. The README always shows the steps that work *today*.
 
 ### A. Any laptop, once (no hardware needed)
 
@@ -195,8 +199,11 @@ Each milestone is **one pull request**. Laptop work is tested on the simulator f
 | 7 | **Live Jev.** ✅ Done: spending guard (J4) plus 30-call and 200-call runs on the real rover, 20 Oct. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
 | 8 | **First real drive.** ✅ Done 20 Oct: 30-call and 200-call live-Jev + Gemini runs. The 200-call run exposed the vision cost/quota limit and a hang when vision disappears. | Yes (done) | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
 | 9 | **Vision cost control**: reuse descriptions, refresh on demand, `VISION_MAX_CALLS` budget (target 6), clean stop after 60 s without vision. ✅ Done 21 Oct (PR #33): the 200-decision simulator run used exactly 6 live descriptions in the worst case (a new photo wanted after every move); rate limits and a spent budget stop the run cleanly. | No | A 200-call run uses **≤6** live descriptions; the station stops cleanly on 429/503 instead of waiting; simulator tests cover the budget and the clean stop. |
+| 10 | **Drive tuning on the real rover** (E5, D7): the honest tilt brief, the 45 cm forward floor, unsure-reverse, the reverse → measure → pivot unstick manoeuvre, the size-aware vision prompt, and the station's share of the request-rate problem. ✅ Done 22 Oct (branch `fix/station-drive-tuning`): the phantom `Tilt Warning` was in 164 of 171 briefs and cost 90 of 196 forwards; after the fix confidence was 0.82–0.97 with 33 forwards in a row, 159 tests pass. | Yes (partly) | A real run no longer rocks between forward and reverse, keeps 45 cm from furniture, and pivots out of a dead end instead of pushing. |
+| 11 | **Firmware 2.6.0** (R7, R8): accelerometer spike rejection and a web server that survives the station's request rate. | Yes (flash) | A 5-minute drive with telemetry every 0.5 s keeps answering `/sensors/data`, and a bump during a drive never produces a `Tilt Warning`. |
+| 12 | **Acceptance drive with vision**: one live-vision run in an open stretch, recording how far the rover gets per description and confirming the unstick manoeuvre in the log. | Yes (vision quota) | The run log shows forward moves per vision call, a clean end at the budget, and at most one unstick manoeuvre. |
 
-**Live Jev (7) came first**, because it's the heart of the project (decided 2026-10-05). Milestones 1–9 are done. The next step is a real 200-call run with the new vision budget, then review the log together. Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai).
+**Live Jev (7) came first**, because it's the heart of the project (decided 2026-10-05). Milestones 1–10 are done. **Next: milestone 11 (firmware 2.6.0, needs a flash), then milestone 12 (the acceptance drive with live vision).** Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai).
 
 ## 7. Not in scope (for now)
 
@@ -210,7 +217,8 @@ Each milestone is **one pull request**. Laptop work is tested on the simulator f
 | Question | How we'll answer it |
 |---|---|
 | Does `.local` work on our phone's hotspot? Some phones block devices from seeing each other. | Works on the current hotspot; the network scan is the backup. Windows sometimes rejoins the home WiFi, so pin the hotspot before trusting a "board not found" result. |
-| What is the cheapest safe vision cadence? | Answered by milestone 9: one description is reused until the rover moves 14 steps or 12 s pass (or something close gets closer, or Jev is unsure), with a hard cap of 6 descriptions per run and a clean stop when vision is gone. Confirm on the next real 200-call run. |
+| What is the cheapest safe vision cadence? | Answered by milestone 9: one description is reused until the rover moves 14 steps or 12 s pass (or something close gets closer, or Jev is unsure), with a hard cap of 6 descriptions per run and a clean stop when vision is gone. Milestone 12 measures how far the rover actually gets per description. |
+| Why does the rover's web server stall under load? | Seen on 22 Oct: after ~18 s at ~4.2 requests/s it answered ping but no HTTP. Milestone 11 fixes it in the firmware; until then the station polls telemetry every 1000 ms. |
 | Can Jev accept the photo directly? | Ask TypeSafe. If Jev can see images, the separate vision bill disappears. Until then, `describe.py` stays. |
 | A free/local way for the camera to help (no paid API) | Later: a small vision model on the laptop (for example Ollama) or simple image rules. The vision budget in milestone 9 is the cheaper first step. |
 

@@ -16,9 +16,12 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover (ESP32): driving, sensors, own WiFi control page | ✅ Works |
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
-| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **20 Oct: 30-call run (26 approved forward moves, ~1 m+, 3 gate stops, 0 collisions) and a 200-call run (199 decisions, 197 sent, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out).** The 200-call run ended 104 cm from the office chair. **21 Oct: milestone 9 merged (PR #33)** — descriptions are reused, live vision is capped at 6 per run, and the station stops cleanly when vision is gone |
-| Vision cost control (reuse descriptions, 6-call budget, clean stop) | ✅ Milestone 9 merged 21 Oct (PR #33): one description lasts until 14 steps / 12 s / something close / Jev unsure; at most 6 live descriptions per run (pre-flight included); forward refused past 20 s or 24 steps; clean stop after 60 s without vision. 146 tests pass; awaits a real run |
-| Project plan (`SPEC.md`) | ✅ Written. Milestones 0–9 |
+| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **20 Oct: 30-call run (26 approved forward moves, ~1 m+, 3 gate stops, 0 collisions) and a 200-call run (199 decisions, 197 sent, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out).** The 200-call run ended 104 cm from the office chair. **21 Oct: milestone 9 merged (PR #33).** **22 Oct: tuned on the real rover** — the phantom `Tilt Warning` that made Jev hedge is fixed (confidence 0.50 → 0.82–0.97), plus a 45 cm forward floor and the unstick manoeuvre; see the first row of the session log |
+| Vision cost control (reuse descriptions, 6-call budget, clean stop) | ✅ Milestone 9 merged 21 Oct (PR #33): one description lasts until 14 steps / 12 s / something close / Jev unsure; at most 6 live descriptions per run (pre-flight included); forward refused past 20 s or 24 steps; clean stop after 60 s without vision. 146 tests pass |
+| Drive tuning on the real rover | ✅ 22 Oct (branch `fix/station-drive-tuning`): the phantom `Tilt Warning` (164/171 briefs, 90/196 forwards stopped) is fixed → confidence 0.82–0.97; 45 cm forward floor; unsure-reverse allowed when close; reverse → measure → pivot ~90° unstick manoeuvre; size-aware vision prompt; telemetry 1000/2500 ms. **159 tests pass.** Awaits the live-vision acceptance run |
+| Rover web server under load | ⚠️ Known limit: at ~4.2 requests/s it stopped answering HTTP after ~18 s (22 Oct). Laptop side now polls every 1000 ms; the firmware fix is milestone 11 |
+| Firmware 2.6.0 (spike rejection + server) | ⬜ Written in `SPEC.md` (milestones 11), **not started**. Needs a flash (USB) |
+| Project plan (`SPEC.md`) | ✅ Written. Milestones 0–10 done, 11–12 planned |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
 | Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
@@ -49,6 +52,10 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 - **Photo descriptions run on Gemini's free tier** (2026-10-20). New `VISION_PROVIDER` setting: `gemini` (free key from Google AI Studio, one photo every ~5 s) or `anthropic` (the old paid Claude path, kept working). `VISION_FOCUS` names the objects that matter. *Why:* Jev only needs a short, honest description; the free tier makes it $0, and enabling billing later changes nothing in the code.
 - **Vision calls are budgeted separately from Jev, and one description is reused** (2026-10-21). Vision costs more per call than Jev, so the station describes again only when there is no description, the rover moved 14 steps (a turn counts as 6), the description is 12 s old, something within 60 cm got 20 cm closer, or Jev was unsure. A run makes at most **6** live descriptions (pre-flight included); the gate refuses forward on a view older than 20 s or 24 steps (turns and reverse stay allowed); and the run stops cleanly when the budget is spent with a stale view, or after 60 s without a description. *Why:* the 200-call run used ~13–15 descriptions and exhausted Gemini's 20/day free quota; the next attempt then waited forever. Jev credits are not the bottleneck.
 - **Commit early and often, theme-wise** (2026-10-20), a standing rule now in `CLAUDE.md` and `CONTRIBUTING.md`. *Why:* many small, themed commits are easier to review, revert and understand than one big one.
+- **Jev is only told what is true right now** (2026-10-22). A `Tilt Warning` event reaches Jev only when the orientation also says tilted. *Why:* the firmware's 8 s event window turned one wheel bump into a "tilt warning" on 164 of 171 briefs, Jev hedged, and the gate stopped 90 of 196 forwards — the rover rocked instead of driving. Fixing this raised confidence from ~0.50 to 0.82–0.97.
+- **Keep 45 cm ahead, not 20 cm** (2026-10-22). The station refuses forward inside `SAFE_DISTANCE_CM`; the firmware's 20 cm veto is the last-resort reflex. *Why:* at full speed one 500 ms pulse covers ~25 cm, so 20 cm is already too late — the rover pushed into a stool twice before this rule.
+- **Backing off is always allowed; pivoting beats shuffling** (2026-10-22). Reverse passes the gate even when Jev is unsure and something is close; with no room the station reverses once, measures, then pivots ~90°. *Why:* forward/reverse shuffling against furniture is the failure people actually see, and a pivot changes what the camera sees.
+- **The vision prompt describes the rover, not just the room** (2026-10-22): ~15 × 20 cm, a 25 cm gap fits, floor visible under an object means passable. *Why:* "blocked within 1 m" turned every passable gap into a wall and the rover refused to move.
 - **Jev spending guard** (2026-10-06): each run makes at most `JEV_MAX_CALLS` real Jev calls (default 20), then stops the rover and ends. `--sim` uses the pretend Jev unless you add `--live-jev`. Tests never call the real Jev. *Why:* credits cost money, and the leader wants very careful use while we build.
 - **`SPEC.md` is the plan.** Each pull request is one milestone from it.
 - **The leader's manual tasks aren't written here until they're confirmed done** (2026-10-06). Claude keeps the open ones in its private memory and asks about them every session (see `CLAUDE.md`). *Why:* the diary should only say what really happened.
@@ -56,16 +63,52 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 ## Next steps
 
-The full build order is in `SPEC.md` section 6.
+The full build order is in `SPEC.md` section 6. Milestones 0–10 are done.
 
-1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct, including the 30-call and 200-call runs.** The 200-call run made 199 decisions, 197 sent, 77 approved forward moves, 104 gate stops, 0 refusals; 110,980 tokens in / 15,006 out. ~~Milestone 9 — vision cost control.~~ **Merged 21 Oct (PR #32, then PR #33):** reuse one description, refresh only when needed, cap at 6 per run, stop cleanly after 60 s without vision. **Next: run a real 200-call drive with the new budget and review the log.** No board flash is needed (Python-only).
-2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
-3. ~~Later: a free way for the camera to help Jev~~ **Built, live-tested, and mounted on the rover.** The free tier is **20 requests/day per project per model**; the 200-call run used ~13–15 descriptions and exhausted it. The next attempt then hung waiting for vision. Milestone 9 makes vision cheap and bounded. Options remain billing, a new project/key, later a local model, or `DESCRIBE_MODE=mock` for sensor-only tests.
-4. **When firmware changes next, flash each board separately** (`rover1`, then `cam1`). The current boards are rover **2.5.5** and camera **2.2.0**; no flash was done in the last sessions, and the vision work does not need one.
+1. **Milestone 11 — firmware 2.6.0 (needs a flash, leader does it on USB).** Two fixes taken from today's drive: (a) ignore accelerometer samples whose magnitude is far from 1 g, so a bump cannot stamp a `Tilt Warning` (the station already hides stale ones); (b) make the web server survive the station's request rate — it stopped answering HTTP after ~18 s at ~4.2 requests/s. Until then keep `TELEMETRY_EVERY_MS=1000`.
+2. **Milestone 12 — the acceptance drive with live vision.** Tomorrow the Gemini quota resets: run `--check` (1 description), then one live run in the most open stretch with `VISION_MAX_CALLS=15`, and record how far the rover gets per description plus whether an unstick manoeuvre appears in the log. Don't spend a check plus two runs on the same day.
+3. **Merge `fix/station-drive-tuning`** (branch is local, not pushed): `git push -u origin fix/station-drive-tuning`, open the PR, wait for the six CI checks, merge.
+4. **A "stuck" badge on mission control** when the station gives up after three unstick tries, so the person watching knows to step in (small, no hardware).
+5. ~~Milestone 8 — the first real drive~~ **Done 20 Oct** (30-call and 200-call runs). ~~Milestone 9 — vision cost control~~ **Merged 21 Oct (PR #32, #33).** ~~Milestone 10 — drive tuning~~ **Done 22 Oct**.
+6. **When firmware changes next, flash each board separately** (`rover1`, then `cam1`). The boards are rover **2.5.5** and camera **2.2.0**; nothing was flashed on 22 Oct.
 
 ---
 
 ## Session log
+
+### 2026-10-22 — Session 20: tuning the drive on the real rover (20 vision calls)
+
+**What we did**
+
+1. **Started with a dead IMU.** `/sensors/data` reported `i2c_ok:0`, `accX/Y/Z` all zero, pitch/roll pinned at −90/90 and `last_event: Tilt Warning`, so the firmware refused every move as "tilt". Power-cycling the rover and reseating the MPU6050 wires fixed it (`i2c_ok:1`, pitch 3°, roll −3°, `Nominal`). Same fault as session 16: it is a wiring/power problem, not software.
+2. **Found why the rover rocked back and forth instead of driving.** In the first real run of the day, **164 of 171 briefs** sent to Jev contained `Recent event: Tilt Warning` while the same brief said `Orientation: level (pitch 3 deg)`. Only 9 briefs were genuinely tilted. One wheel bump spikes the accelerometer, the firmware stamps a Tilt Warning that lasts 8 s, and Jev read a hazard on almost every decision — so it hedged (`forward 0.50 / stop 0.33 / reverse 0.10`) and the 0.60 confidence floor stopped **90 of 196** forwards. Result: rocking, no turning.
+3. **Fixed the brief (`state_text.py`).** A Tilt Warning is only passed on when the rover is really tilted now; otherwise Jev reads "a bump spiked the tilt sensor while driving; the rover is level again now". Immediately after the change the same rover read **0.82–0.97** on good moves and drove 33 forwards in a row.
+4. **Fixed Jev's move descriptions (`jev_client.py`).** Its "stop" option was the catch-all ("when unsure… or nowhere is safe"), and turning was only allowed "toward open space on the left/right", so a blocked view produced endless stops (21 in a row). Turning is now described as the way round an obstacle, and stop is reserved for "tilted, or turning and reversing are both unsafe".
+5. **Told the vision AI the rover's size (`describe.py`).** It used to call anything within 1 m "blocking", so a bed frame with a passable gap looked like a wall and Jev refused to go on. The prompt now says the rover is ~15 × 20 cm, that a gap of ~25 cm or wider is passable, and that floor visible under or around an object means the way is open.
+6. **The vision quota is the hard limit.** 20 Gemini requests/day per model: the check used 1, the first run 8, the second 4, and the rest went on retries before Gemini answered **429**. Two runs plus a check is a day's quota; plan the day's runs around that.
+7. **Safety tuning from what actually broke.**
+   - `SAFE_DISTANCE_CM=45` and the station now refuses **forward inside 45 cm** (the firmware's own veto is only 20 cm, far too late: the rover pushed into a stool twice at 18–36 cm). A negative distance still means "no echo within ~2 m", so open floor stays drivable.
+   - A **confidence floor no longer blocks reverse** when something is closer than the safe distance: backing off only adds clearance, and Jev's five-way answer often splits reverse from stop (0.48 reverse at 18 cm left the rover pinned until it was moved by hand).
+   - **New unstick manoeuvre** (`station.py`): when forward is refused by the distance rule or by the rover, back off 500 ms, then *measure*: if there is 45 cm or more now, hand back to Jev; if the room did not improve, pivot 3 steps of 500 ms (about 90°) toward the open side and let the camera see somewhere new. Each step waits for the move to finish (a new `/jev/cmd` replaces the running one — three turns sent 90 ms apart only turned the wheels for 270 ms). After three manoeuvres without room it stops and says the rover needs a hand.
+8. **The rover's web server froze once.** At 4.2 requests/s (telemetry every 0.5 s + a command every ~0.45 s) it answered `ping` but no HTTP for the rest of the run, ~18 s in. The watchdog stopped the wheels (confirmed by hand), and after a restart everything worked. Laptop side now polls telemetry every **1000 ms** and tolerates **2500 ms** staleness (was 500/1500). The real fix is in the firmware and is not written yet.
+9. **`--check` passed 12/12** at the start (boards by name, token, camera 20 KB, live description, Jev 597 ms). Tests: **159 pass**, ruff clean. New tests cover the honest tilt brief, the 45 cm forward floor, no-echo-is-clear, unsure-reverse-when-close, and the whole unstick sequence.
+10. **Nothing was flashed.** All of today's fixes are in the Earth Station (Python). The rover is still **2.5.5** and the camera **2.2.0**.
+
+**Things to remember**
+
+- **A `Tilt Warning` in the brief is only trustworthy if the orientation line says tilted.** The firmware's 8 s event window plus one accelerometer spike can otherwise dominate every decision. This was the single biggest cause of the rover "not listening" today.
+- **Jev's confidence is a five-way distribution.** 0.50 forward with 0.33 stop is a decisive answer, not doubt. Judge Jev by the shape (`path_blocked` 0.04 = "the way is clear") as well as the number.
+- **The ultrasonic cannot see thin legs, edges or dark floor.** It reported "no reading" (which means "nothing within ~2 m", not "broken") while the rover was 18 cm from a stool leg. Vision and the 45 cm floor are the real protection.
+- **`-1` / no reading ≠ blocked.** Treating it as blocked would freeze the rover in the open room; that is why the gate allows forward on a negative distance.
+- **Gemini free tier: 20 descriptions/day/model.** One `--check` plus one 2-minute run can use it all. Reserve the last few for the acceptance run, or enable billing.
+- **`i2c_recov` climbed to 6 during driving** (motor EMI on the I2C bus). It recovers each time, but a loose MPU6050 lead will always show as `i2c_ok:0` + zero accelerometer + frozen ±90° angles. Power-cycle and reseat before driving.
+- **Request budget of the rover's web server:** ~2 commands/s plus 1 telemetry/s is the new setting; 4/s hung it once. Keep `TELEMETRY_EVERY_MS` at 1000 until the firmware is fixed.
+
+**Next steps**
+
+1. **Firmware 2.6.0 (needs a flash, leader does it):** (a) reject accelerometer spikes whose magnitude is far from 1 g so a bump cannot stamp a Tilt Warning; (b) make the web server survive 4 requests/s or serve telemetry on a second core/async; (c) optionally raise `JEV_MIN_FORWARD_CM` to 35–45 cm to match the station.
+2. **First run tomorrow:** `--check` (1 vision), then one live-vision run with `VISION_MAX_CALLS=15` in an open stretch, and record how far it gets per vision call.
+3. **Add a "stuck" badge to mission control** when the station gives up after three unstick tries, so the person watching knows to step in.
 
 ### 2026-10-21 — Session 19: vision cost control (milestone 9)
 
