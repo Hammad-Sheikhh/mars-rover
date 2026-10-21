@@ -49,6 +49,7 @@ graph TD
 | Rover Jev Auto mode (firmware 2.1) | ✅ Hardware-tested (19/20 Oct 2026): all four drive moves, obstacle veto (<20 cm), watchdog, token check ([SPEC.md](SPEC.md) milestone 3) |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
 | Photo descriptions with Gemini vision (`describe.py`) | ✅ Merged + live-tested with a free Gemini key (2.4 s). Free tier is **20 requests/day per model**, so long drives need billing or `DESCRIBE_MODE=mock` (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
+| Vision cost control (reuse descriptions, 6-call budget) | ⏳ **Next:** [SPEC.md](SPEC.md) milestone 9. A 200-call run used ~13–15 descriptions and exhausted the free quota; a second run then waited forever for vision |
 | Camera + vision bench (`bench.py`) | ✅ Merged: `python -m earth_station.bench` scores the photo pipeline (smoke / stamina / ground-truth probes / rate-limit burst) before the camera goes on the rover |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |

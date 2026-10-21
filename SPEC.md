@@ -6,7 +6,7 @@ This is the plan for the whole project: what we're building, how it should behav
 * **What we did each session:** [PROGRESS.md](PROGRESS.md)
 * **This file:** where we're going.
 
-Last updated: 2026-10-07.
+Last updated: 2026-10-21.
 
 ---
 
@@ -58,10 +58,10 @@ A small rover drives around a room by itself. An AI called **Jev** chooses each 
 
 | Person | Has | Does |
 |---|---|---|
-| **Project leader** (repo owner) | Laptop, no rover yet | Earth Station, mission control page, photo descriptions, Jev connection, and writing the firmware changes (CI compile-checks them). |
-| **Teammate** | The rover and camera | Flashes firmware, runs the hardware test checklist in each firmware pull request, reports what happened. |
+| **Project leader** (repo owner) | Laptop, rover and camera (since 2026-10-20) | Earth Station, mission control page, photo descriptions, Jev connection, firmware changes, and hardware tests in person. |
+| **Teammate** | No rover for now | Review and advice; does not flash firmware for now. |
 
-Because the leader has no hardware, **every laptop-side feature must work against the simulator first**. Firmware changes are written and compile-checked by the leader, then tested on the real rover by the teammate.
+**Every laptop-side feature must still work against the simulator first.** Firmware changes are written and compile-checked by CI, then flashed and tested on the real boards by the leader. The rover and camera are **two separate boards**: each has its own firmware, and each needs its own flash. Flashing `rover1` does not update `cam1`, and vice versa.
 
 ## 4. Requirements
 
@@ -113,11 +113,12 @@ Already built (see [docs/EARTH_STATION.md](docs/EARTH_STATION.md)): the decide l
 
 | # | Requirement |
 |---|---|
-| D1 | A vision AI (Claude) turns each camera photo into the short description Jev reads: `summary`, `obstacle_ahead`, `clear_side`, `hazards`. That shape is already defined and checked in `describe.py`. |
-| D2 | Key in `.env` (`VISION_API_KEY`, an Anthropic key). The model (`VISION_MODEL`, default `claude-opus-5-5`) and how hard it thinks (`VISION_EFFORT`, default `low`) are settings too. Claude answers in a fixed JSON shape (structured output), so the reply always has the four fields. |
-| D3 | It must answer within about 1.5 s. If it's slow or fails, the scene goes stale, and the safety gate already stops the rover then. |
+| D1 | A vision AI turns each camera photo into the short description Jev reads: `summary`, `obstacle_ahead`, `clear_side`, `hazards`. That shape is defined and checked in `describe.py`. |
+| D2 | `VISION_PROVIDER=gemini` uses a Google AI Studio key; `anthropic` keeps the older Claude path. `VISION_MODEL` defaults to `gemini-3.5-flash`, and `VISION_FOCUS` names the objects that matter. The reply is enforced in a fixed JSON shape. |
+| D3 | Target **2–5 s** per description; `VISION_TIMEOUT_S` (default 40 s) is the hard limit. If it is slower or fails, the scene goes stale and the safety gate stops the rover. |
 | D4 | Test it on saved photos with no rover: `python -m earth_station.describe photo.jpg`. Keep a few sample photos in `tests/photos/` for the tests. |
-| D5 | **Live vision is optional and off by default** (decided 2026-10-06: the Claude API costs money we don't have now). Without it, Jev drives on the sensors only. A real photo in `mock` mode must then tell Jev honestly that there is no camera vision, and never claim the way is clear. |
+| D5 | **Live vision is optional.** `DESCRIBE_MODE=mock` stays the safe default without a key. The free Gemini tier is **20 requests/day per model** (measured 20 Oct 2026), so live vision must be budgeted (D6). A real photo in `mock` mode must tell Jev honestly that there is no camera vision, and never claim the way is clear. |
+| D6 | **Cost guard (2026-10-21):** one description is reused for many Jev decisions. Refresh only when needed: the first frame, the rover has moved a set distance, the scene is older than `SCENE_MAX_AGE_MS`, the distance sensor is below `VISION_NEAR_CM`, or Jev was unsure. A run makes at most `VISION_MAX_CALLS` live descriptions (target **6** per 200 Jev calls). If vision is unavailable for `VISION_UNAVAILABLE_S` (default 60 s), the run stops cleanly instead of waiting forever. |
 
 ### 4.6 Jev
 
@@ -145,7 +146,7 @@ The camera needs only N3, N4 and N5. Its `/capture` endpoint already does what w
 
 ## 5. Setup procedure (the target)
 
-This is how setup will look when milestones 1–3 are done. The README always shows the steps that work *today*.
+This is how setup looks today, with milestones 1–8 done. The README always shows the steps that work *today*.
 
 ### A. Any laptop, once (no hardware needed)
 
@@ -165,7 +166,7 @@ This is how setup will look when milestones 1–3 are done. The README always sh
 1. On your phone, turn on the hotspot. Use the 2.4 GHz band if your phone asks, because ESP32 boards can't see 5 GHz WiFi.
 2. On the laptop, put the hotspot name and password in `.env` (`WIFI_SSID`, `WIFI_PASS`).
 3. Run `python -m earth_station.secrets`. It creates `rover1/secrets.h` and `cam1/secrets.h` with the same hotspot details, and creates the rover token.
-4. Flash both boards from the Arduino IDE (the steps are in the README). Then open the Serial monitor. Each board should print "WiFi connected" and its `.local` name.
+4. Flash both boards from the Arduino IDE (the steps are in the README). **Each board is a separate flash: `rover1` and `cam1`; one upload does not update the other.** Then open the Serial monitor. Each board should print "WiFi connected" and its `.local` name.
 5. Connect the laptop to the same hotspot.
 6. Run `python -m earth_station --check`. All lines should say OK.
 
@@ -180,21 +181,22 @@ If the person who flashes the rover isn't the person who runs the Earth Station,
 
 ## 6. Milestones (the build order)
 
-Each milestone is **one pull request**. Laptop work comes first, because the leader has no rover.
+Each milestone is **one pull request**. Laptop work is tested on the simulator first; hardware tests are done by the leader in person.
 
 | # | Milestone | Needs hardware? | Done when |
 |---|---|---|---|
 | 0 | **This spec** | No | Merged. |
 | 1 | **Easy setup**: `WIFI_SSID`/`WIFI_PASS` in `.env`, the `earth_station.secrets` helper with token generation, the `--check` command, README Quick Start rewritten. ✅ Done (PR #8). | No | A fresh clone on another laptop goes from zero to `--sim` by following the README alone. |
 | 2 | **Find the boards**: `.local` lookup plus a network scan, using `GET /id`. The simulator answers `/id` too. ✅ Done (PR #9). | No | Tests prove the finder works against the simulator, and `--check` reports what it found. |
-| 3 | **Rover firmware: Jev Auto** (R1–R6). ✅ Done: hardware checklist passed on the real rover 19–20 Oct (PR #7). | Teammate tests | CI compiles it, and the teammate completes the hardware checklist in the PR. |
-| 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. ✅ Done: hardware checklist passed on the real camera 19–20 Oct (PR #10). | Teammate tests | Same as 3. |
-| 5 | **Photo descriptions**: live `describe.py` using Claude vision. ✅ Code done, tested with a fake Claude. ⏸ Using it is paused: the API costs money, so we drive on sensors only for now (D5). | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
+| 3 | **Rover firmware: Jev Auto** (R1–R6). ✅ Done: hardware checklist passed on the real rover 19–20 Oct (PR #7). | Hardware test (done) | CI compiles it, and the hardware checklist passes on the real rover. |
+| 4 | **Camera firmware**: `cam.local`, `/id`, boot messages. ✅ Done: hardware checklist passed on the real camera 19–20 Oct (PR #10). | Hardware test (done) | Same as 3. |
+| 5 | **Photo descriptions**: live `describe.py`, Gemini by default. ✅ Done and live-tested; free tier measured at 20 requests/day per model. | No (saved photos) | Sample photos give sensible descriptions, and tests pass with the vision AI mocked. |
 | 6 | **Mission control page.** ✅ Done: works on the simulator, with tests for STOP/Resume, plus a plain-word, step-by-step view of each decision and a recent-decisions table. | No | Usable in `--sim`, the STOP button works, and there are tests for STOP/Resume. |
-| 7 | **Live Jev.** ✅ Code done, with a spending guard (J4). Credits bought; first live test next. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
-| 8 | **First real drive.** | Yes | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
+| 7 | **Live Jev.** ✅ Done: spending guard (J4) plus 30-call and 200-call runs on the real rover, 20 Oct. | No (needs credits) | `--sim --live-jev` runs with the real Jev and stays within `JEV_MAX_CALLS`. |
+| 8 | **First real drive.** ✅ Done 20 Oct: 30-call and 200-call live-Jev + Gemini runs. The 200-call run exposed the vision cost/quota limit and a hang when vision disappears. | Yes (done) | Section 5 B and C work end to end, and the run log is saved and reviewed together. |
+| 9 | **Vision cost control**: reuse descriptions, refresh on demand, `VISION_MAX_CALLS` budget (target 6), clean stop after 60 s without vision. **Next.** | No | A 200-call run uses **≤6** live descriptions; the station stops cleanly on 429/503 instead of waiting; simulator tests cover the budget and the clean stop. |
 
-**Live Jev (7) comes first**, because it's the heart of the project (decided 2026-10-05). Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai). After that, milestones 1, 2, 5 and 6 can be done in any order. Milestone 3 is the one the teammate is waiting for, so it's worth doing early.
+**Live Jev (7) came first**, because it's the heart of the project (decided 2026-10-05). Milestones 1–8 are done. **Milestone 9 is next**, because vision is now the cost bottleneck. Jev's official docs are at [docs.typesafe.ai](https://docs.typesafe.ai).
 
 ## 7. Not in scope (for now)
 
@@ -207,9 +209,10 @@ Each milestone is **one pull request**. Laptop work comes first, because the lea
 
 | Question | How we'll answer it |
 |---|---|
-| Does `.local` work on our phone's hotspot? Some phones block devices from seeing each other. | Milestone 8. The network scan is the backup. If the phone blocks devices completely, use a different phone or a small travel router. |
-| A free way for the camera to help (no paid API) | Later, after the first real drive. Options: a small vision AI running on the laptop (for example with Ollama), or simple image rules such as "is the bottom of the photo mostly floor?". Measure speed on the teammate's sample photos. |
-| Is one description every 1.5 s fast enough to avoid obstacles? | The rover's own 20 cm forward veto covers us meanwhile. Measure it in milestone 8. |
+| Does `.local` work on our phone's hotspot? Some phones block devices from seeing each other. | Works on the current hotspot; the network scan is the backup. Windows sometimes rejoins the home WiFi, so pin the hotspot before trusting a "board not found" result. |
+| What is the cheapest safe vision cadence? | Milestone 9: reuse one description, refresh only when the rover has moved, an obstacle is close, the scene is stale, or Jev is unsure; cap at 6 descriptions per 200-call run. Measure with the simulator and real runs. |
+| Can Jev accept the photo directly? | Ask TypeSafe. If Jev can see images, the separate vision bill disappears. Until then, `describe.py` stays. |
+| A free/local way for the camera to help (no paid API) | Later: a small vision model on the laptop (for example Ollama) or simple image rules. The vision budget in milestone 9 is the cheaper first step. |
 
 ## 9. How we work
 
