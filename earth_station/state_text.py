@@ -57,6 +57,14 @@ def build(board: Whiteboard, settings: Settings) -> str:
     if board.scene:
         age = board.scene_age_ms() or 0
         lines.append(f"Camera, {age / 1000:.1f} s ago: {board.scene['summary']}")
+        side = board.scene.get("clear_side")
+        if side == "none":
+            lines.append("Open side: none (neither side is known to be open).")
+        elif side in ("left", "right", "both"):
+            lines.append(f"Open side: {side}.")
+        blocked = board.scene.get("obstacle_ahead")
+        if isinstance(blocked, bool):
+            lines.append(f"Obstacle ahead: {'yes' if blocked else 'no'}.")
         if board.scene.get("hazards"):
             lines.append("Hazards: " + ", ".join(board.scene["hazards"]) + ".")
     else:

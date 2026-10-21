@@ -48,7 +48,7 @@ graph TD
 | Earth Station (`earth_station/`) | ✅ Finds the real boards by name and drives them over the hotspot (drive commands + safety vetoes verified on hardware) |
 | Rover Jev Auto mode (firmware 2.1) | ✅ Hardware-tested (19/20 Oct 2026): all four drive moves, obstacle veto (<20 cm), watchdog, token check ([SPEC.md](SPEC.md) milestone 3) |
 | Real Jev connection | ✅ Ready: add your key to `.env` (see Quick Start part C). A call limit per run keeps spending small |
-| Photo descriptions with Gemini vision (`describe.py`) | ✅ Merged + live-tested with a free Gemini key on a saved photo (2.4 s). Claude stays as a paid alternative (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
+| Photo descriptions with Gemini vision (`describe.py`) | ✅ Merged + live-tested with a free Gemini key (2.4 s). Free tier is **20 requests/day per model**, so long drives need billing or `DESCRIBE_MODE=mock` (Quick Start part D, [SPEC.md](SPEC.md) milestone 5) |
 | Camera + vision bench (`bench.py`) | ✅ Merged: `python -m earth_station.bench` scores the photo pipeline (smoke / stamina / ground-truth probes / rate-limit burst) before the camera goes on the rover |
 | Easy setup: one `.env` for both boards, `--check` | ✅ Works ([SPEC.md](SPEC.md) milestone 1) |
 | Board finder: no IP addresses to type | ✅ Works on the simulator ([SPEC.md](SPEC.md) milestone 2) |
@@ -223,7 +223,9 @@ If someone else flashes the rover, send them `rover1/secrets.h` (or just the tok
 
 Jev can't see pictures, so a vision AI can look at each camera photo and write a one-line description for it, such as "Table leg about 40 cm ahead. Open floor to the right."
 
-**You can skip this part.** The recommended provider is Google's Gemini, which has a **free tier** (no credit card): one photo every ~5 s costs $0. Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply. Keep the photo rate gentle (`CAMERA_EVERY_MS=5000`); faster rates need billing enabled, at roughly $0.05–0.12 per hour of driving.
+**You can skip this part.** The recommended provider is Google's Gemini, which has a **free tier** (no credit card). Without it, Jev drives on the rover's distance and tilt sensors, and the rover's own safety rules still apply. Keep the photo rate gentle (`CAMERA_EVERY_MS=5000`); faster rates need billing enabled, at roughly $0.05–0.12 per hour of driving.
+
+**Free-tier quota, measured 2026-10-20:** Gemini 2.5 Flash allows only **20 requests per day per model** on the free tier (the API says "retry in ~15 h" when it runs out). A pre-flight plus a 10-call drive can use that up, so a long vision drive needs billing or `DESCRIBE_MODE=mock`. The station now backs off and waits when it sees a rate limit instead of retrying every 5 s.
 
 1. Get a key: sign in at [aistudio.google.com](https://aistudio.google.com) with a Google account, click **Get API key**, create one, copy it.
 2. Open `.env` and set:

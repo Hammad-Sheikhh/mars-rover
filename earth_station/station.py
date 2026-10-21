@@ -26,6 +26,15 @@ from .logger import Logger, paint
 from .whiteboard import Whiteboard
 
 HISTORY = 20  # recent decisions shown on mission control
+VISION_BACKOFF_START_S = (
+    15.0  # a 429 means "slow down": retrying every 5 s keeps the quota saturated
+)
+VISION_BACKOFF_MAX_S = 120.0
+
+
+def _next_vision_backoff(current_s: float) -> float:
+    """15 s after the first rate limit, then double, capped at 2 minutes."""
+    return VISION_BACKOFF_START_S if current_s <= 0 else min(VISION_BACKOFF_MAX_S, current_s * 2)
 
 
 class Station:
@@ -39,10 +48,25 @@ class Station:
         self._last_error: dict[str, str] = {}
         self.jev_budget_spent = False
         self.paused = False  # STOP on mission control: no moves until Resume
+        self._hold_reason: str | None = None  # why we are not asking Jev right now
         self.last: dict[str, Any] | None = None  # Jev's last choice and what the gate did
         self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY)  # newest last
 
     # ---------- pre-flight ----------
+    async def _read_rover_with_retry(self, attempts: int = 3) -> dict[str, Any]:
+        """The rover's /sensors/data hiccups for a fraction of a second every ~20 s.
+        One bad read must not abort pre-flight, so give it a few quick tries."""
+        last: LinkError | None = None
+        for i in range(attempts):
+            try:
+                return await self.rover.read()
+            except LinkError as e:
+                last = e
+                if i < attempts - 1:
+                    await asyncio.sleep(0.5)
+        assert last is not None
+        raise last
+
     async def preflight(self) -> bool:
         s, log = self.s, self.log
         print(paint("Earth Station", "blue") + " pre-flight")
@@ -56,7 +80,7 @@ class Station:
         ok = True
 
         try:
-            t = await self.rover.read()
+            t = await self._read_rover_with_retry()
             self.board.post_telemetry(t)
             dist = t.get("distance_cm")
             log.check(True, f"rover answering | mode {self.board.mode} | distance {dist} cm")
@@ -109,6 +133,7 @@ class Station:
 
     async def camera_watcher(self) -> None:
         last_summary = self.board.scene["summary"] if self.board.scene else None
+        backoff_s = 0.0  # grows after a rate limit (429), reset on any good answer
         while True:
             try:
                 photo = await self.camera.capture()
@@ -117,6 +142,7 @@ class Station:
                 scene = await describe(photo, self.s)
                 self.board.post_scene(scene)
                 self._clear_error("vision")
+                backoff_s = 0.0
                 if scene["summary"] != last_summary:
                     self.log.scene(scene)
                     last_summary = scene["summary"]
@@ -124,14 +150,65 @@ class Station:
                 self._error("camera", str(e))
             except DescribeError as e:
                 self._error("vision", str(e))
-            await asyncio.sleep(self.s.camera_every_ms / 1000)
+                if "rate limit" in str(e).lower():
+                    backoff_s = _next_vision_backoff(backoff_s)
+                    self.log.info(
+                        f"vision: rate limited; waiting {backoff_s:.0f} s for the quota to reset",
+                        "yellow",
+                    )
+            await asyncio.sleep((backoff_s or self.s.camera_every_ms) / 1000)
 
     async def decision_maker(self) -> None:
         """Returns when the Jev call limit is reached, which ends the run."""
         while not self.jev_budget_spent:
+            if self.s.jev_mode == "live" and self.jev.calls >= self.s.jev_max_calls:
+                # The last paid call is used up: end now, even if the scene is stale
+                # (otherwise the freshness hold below would keep the run alive for nothing).
+                self.log.info(
+                    f"jev: Jev call limit reached ({self.jev.calls} calls, "
+                    "JEV_MAX_CALLS in .env); stopping so no more credits are spent"
+                )
+                self.jev_budget_spent = True
+                return
             if self.board.mode == "jev" and not self.paused:
-                await self.decide_once()
+                # Don't spend a paid call when the safety gate would veto the answer
+                # anyway (old readings, or a photo description that hasn't arrived yet).
+                wait = self._gate_wait_reason()
+                if wait:
+                    await self._hold(wait)
+                else:
+                    self._release_hold()
+                    await self.decide_once()
+            else:
+                self._release_hold()
             await asyncio.sleep(self.s.decide_every_ms / 1000)
+
+    def _gate_wait_reason(self) -> str | None:
+        """The gate's freshness rules, checked before asking Jev so credits aren't wasted."""
+        t_age = self.board.telemetry_age_ms()
+        if t_age is None or t_age > self.s.telemetry_max_age_ms:
+            return "telemetry too old"
+        s_age = self.board.scene_age_ms()
+        if s_age is None or s_age > self.s.scene_max_age_ms:
+            return "camera description too old"
+        return None
+
+    async def _hold(self, reason: str) -> None:
+        """Stop once, then wait quietly for fresh data instead of burning Jev calls."""
+        if self._hold_reason == reason:
+            return
+        self._hold_reason = reason
+        self.log.info(f"{reason}: holding, no Jev calls until fresh data arrives", "yellow")
+        if not self.s.suggest_only:
+            try:
+                await self.rover.send(safety_gate.make_command(self.board, "stop", 0, 0))
+            except LinkError as e:
+                self._error("rover-cmd", str(e))
+
+    def _release_hold(self) -> None:
+        if self._hold_reason:
+            self.log.info(f"{self._hold_reason} cleared: asking Jev again", "green")
+            self._hold_reason = None
 
     async def decide_once(self) -> None:
         board, stats = self.board, self.board.stats

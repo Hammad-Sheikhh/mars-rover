@@ -16,13 +16,13 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 | Rover (ESP32): driving, sensors, own WiFi control page | ✅ Works |
 | Camera (ESP32-CAM): photos, own WiFi live view | ✅ Works |
 | Supabase (online database for readings and photos) | ✅ Works, but **will be dropped later** |
-| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **First live-Jev drive done 20 Oct (Milestone 8, part 1 — on the bench, wheels off the ground). Floor drive left** |
+| Earth Station (laptop program that lets Jev drive) | ✅ Drive commands, safety vetoes and board finding verified on the real rover. **First live-Jev floor drive done 20 Oct (Milestone 8, part 2): live Jev + Gemini vision, four approved forward moves (~17 cm), then the gate stopped it at 0.54–0.59 confidence near a wall. A longer drive needs a bigger clear space, a charged battery and vision quota** |
 | Project plan (`SPEC.md`) | ✅ Written. Milestones 0–8 |
 | Easy setup: hotspot typed once in `.env`, `--check` | ✅ Milestone 1 merged (PR #8) |
 | Finding the boards automatically | ✅ Milestone 2 merged (PR #9). Tested on the simulator |
 | Camera name `cam.local` and `/id` | ✅ Hardware-tested 19–20 Oct: found by name, `/id` answered, photos upload, live view works even with no hotspot (PR #10 checklist complete) |
 | Rover code for "Jev Auto" mode | ✅ Hardware-tested 19–20 Oct: whole PR #7 checklist passed (driving, obstacle veto, watchdog, token) |
-| Photo descriptions with Gemini vision (`earth_station/describe.py`) | ✅ Merged (PR #20) and **live-tested with the real Gemini key**: 2.4 s per description, same four-field shape for Jev. Camera-timing coherence fixed (PR #21). Bench built; run it on the flipped camera before milestone 8 |
+| Photo descriptions with Gemini vision (`earth_station/describe.py`) | ✅ Merged (PR #20) and **live-tested with the real Gemini key**: 2.4 s per description, same four-field shape for Jev. Camera-timing coherence fixed (PR #21). **Free-tier quota measured 20 Oct 2026: only 20 requests/day per model**, so a 10-call vision drive can exhaust it; use billing or `DESCRIBE_MODE=mock` for longer runs |
 | Camera + vision bench (`earth_station/bench.py`) | ✅ Built 20 Oct: smoke / stamina / ground-truth probes / rate-limit burst, PASS/FAIL verdict, 120 tests. Awaits the standalone camera to run for real |
 | Mission control page in the browser, with STOP | ✅ Milestone 6 (PR #17), now upgraded (PR #19): the page explains every decision in plain words, four steps, plus a recent-decisions table |
 | Real Jev connection | ✅ Key works (first real call: 571 ms). Spending guard merged (PR #15) |
@@ -56,13 +56,42 @@ The project diary: what we did, what we decided, and what's next. Claude reads i
 
 The full build order is in `SPEC.md` section 6.
 
-1. **Milestone 8 — the first real drive (part 2).** The bench part is done: 20 Oct, the first live-Jev run drove the real rover on the stand (10/10 decisions sent, gate overruled Jev twice on low confidence, spending guard ended the run). Left: **the floor drive** — open area, person next to the rover, short run, Jev Auto pressed on the rover's page. **Firmware 2.5.5 is flashed and verified on the hotspot** (`/id` answers `2.5.5`, all 12 `--check` items pass), so the floor drive can start; the placement recipe is in session 13's log. `.env` currently says `JEV_MODE=mock`, so use **`--live-jev`** for the real drive (the Jev API key is already set), or set `JEV_MODE=live`.
+1. ~~Milestone 8 — the first real drive (part 2).~~ **Done 20 Oct.** Live Jev + Gemini vision moved the real rover ~17 cm on the floor; the gate stopped it safely at 0.54–0.59 confidence near a wall. **Next proper run:** clear a 2 m lane, charge or swap the rover battery (the reboot and weak motors point to voltage sag), keep the camera on lit open floor, then run 20–30 calls with the validated `gemini-3.5-flash` key. Use `--live-jev`; `.env` stays `JEV_MODE=mock`. The 2–3 kg rover needs full power (255) and chained 500 ms pulses; sensor-only Jev is too unsure for a long drive.
 2. ~~Resume the parked, half-finished mission-control work~~ **Done today, PR #19 merged.**
-3. ~~Later: a free way for the camera to help Jev~~ **Built and live-tested with the real Gemini key.** Now: flash the camera with the Arduino IDE steps (they're in the leader's task notes), then run `python -m earth_station.bench all` on it, and on a pass go to milestone 8 (first real drive with vision).
+3. ~~Later: a free way for the camera to help Jev~~ **Built, live-tested, and mounted on the rover.** The photo pipeline is validated. The free tier is **20 requests/day per project per model**, so a long vision drive needs billing, a new project/key, or `DESCRIBE_MODE=mock`; the station backs off 15–120 s on a 429.
 
 ---
 
 ## Session log
+
+### 2026-10-20 — Session 16: the first floor drive (Milestone 8, part 2)
+
+**What we did**
+
+1. **Diagnosed the "1 cm turn".** With the rover lifted, all four wheels spun correctly in opposite directions for a `turn_left`; on the floor the same command at speed 230 only twitched. The rover weighs 2–3 kg, and a single 500 ms pulse at 230 did not have the torque to break static friction. At full power (255) and four 500 ms pulses back-to-back (2 s), it turned properly. A single 500 ms pulse at 255 still barely moves, so the station must chain pulses.
+2. **Set the station up for chained motion:** `MAX_SPEED=255`, `MOVE_MS=500` (the rover's firmware cap), `DECIDE_EVERY_MS=50` (Jev is asked again as soon as it answers, so the pulses overlap instead of stop-start). Kept the safety gate and the rover's own 20 cm / tilt / watchdog vetoes unchanged.
+3. **Made the station robust (three commits on `fix/station-vision-resilience`, 129 tests, ruff clean):**
+   - It no longer spends a Jev call while the gate would veto for stale telemetry or an old camera description; it sends one stop, holds, and resumes when fresh data arrives. A spent `JEV_MAX_CALLS` budget ends the run even if the scene is stale.
+   - A vision 429 now backs off 15 → 30 → 60 → 120 s instead of retrying every 5 s (which kept the quota saturated for ~3 minutes).
+   - Pre-flight retries the rover's `/sensors/data` read (3 tries, 0.5 s apart) because the endpoint drops one answer for a fraction of a second every ~20 s.
+   - Jev's brief now includes the camera's structured `Open side: …` and `Obstacle ahead: …`, not just prose.
+4. **First clean live-Jev + Gemini vision floor run:** four approved `forward` commands (speed 255), distance 93 → 76 cm; then the gate stopped the rest at confidence 0.54–0.59 as the rover neared the wall. The user described the motion as "barely moved", which matches the measured ~17 cm. No crashes, no rover refusals. A single 29° pitch spike looked like a noisy IMU reading at the time (the user saw a smooth run); it later turned out to be an early sign of the MPU6050 failing.
+5. **Found the real vision limit:** Gemini's free tier is **20 requests per day per model**, not the ~1,000–1,500/day the project plan assumed. Gemini 2.5 Flash was exhausted first; 3.5 Flash (which the API reports as `gemini-3.6-flash`) then hit the same 20/day limit, retry ~14 h 45 m. The older 2.x models are 404 for new users, and the lite/latest aliases timed out. So no free vision until ~noon on 21 Oct.
+6. **Tested the documented fallback:** with `DESCRIBE_MODE=mock` and 30 calls, Jev made four forward pulses (~19 cm) and the gate stopped 24 of 29 decisions as "Jev unsure" (0.47–0.56). Extra calls do not fix confidence; without the camera Jev is guessing. The user moved the rover to a new spot with ~1.1 m of clearance.
+7. **Validated the leader's second Gemini key:** the new project refuses `gemini-2.5-flash` ("no longer available to new users"). Tested the current models on that key: `gemini-3.5-flash` 3.3 s text / 7.0 s photo, `gemini-3.6-flash` 3.3 s, `gemini-3.8-flash` timed out at 30 s, `gemini-3.5-flash-lite` 19 s. Set `VISION_MODEL=gemini-3.5-flash`; the photo description correctly saw "a person seated in a dim room" with hazard "person's feet".
+8. **The IMU failed, then recovered.** `/sensors/data` reported `i2c_ok=0`, `i2c_recov=5`, `accX/accY/accZ=0`, pitch/roll pinned at -90/90 and `vibration=1.0`, while the BMP280 still read pressure/temperature/humidity. The MPU6050 specifically was not answering (the shared I2C bus was alive). The camera also still showed two seated people ahead in dim light, so the path was not clear. No Jev drive commands were sent. After a restart and reseating the sensor wiring, `i2c_ok` returned to 1 with sane pitch/roll and `Nominal`.
+9. **Pivoted to clear a person, then the rover rebooted.** Two in-place right turns (2 s + 1 s at 255, no forward motion) moved a seated person out of the direct view, but the room still had a table/person ~1.5 m ahead. The rover then dropped off WiFi and rebooted; it came back with the IMU healthy and a different distance reading. The reboot plus the earlier weak motors points to a low battery/power brownout. The leader chose to clear the room and charge/swap the battery before a proper run; no further Jev drive calls were spent.
+
+**Things to remember**
+- This rover needs **full power (255) and continuous 500 ms pulses**; 230 and/or a single pulse only beeps/twitches. The firmware caps one command at 500 ms (`JEV_MAX_MOVE_MS`), so chaining commands is the only way to drive it.
+- The rover moves at roughly **8–9 cm/s** on the floor at full power, so a 30-call run is only ~15 s of drive and ~1.2 m at best. A bigger clear space (2 m+) is needed for a satisfying run.
+- **Gemini free tier is 20 requests/day per project per model** (measured 20 Oct 2026). A pre-flight + a 10-call vision drive can use it up. A new API key in the same project does **not** reset it; a new project or billing does. Options: billing (pennies per run), a paid Claude key, or sensor-only (Jev is much less confident).
+- Sensor-only Jev sits around 0.5 confidence even on open floor; don't spend 30 calls on it. Vision is what keeps it above the 0.6 gate.
+- The safety gate did its job: it stopped at 0.54–0.59 near the wall and was never weakened. The rover's own 20 cm forward veto, tilt veto and 1.5 s watchdog were never bypassed.
+- `/sensors/data` and `/jev/cmd` still hiccup occasionally; the station recovers, and pre-flight now retries the sensor read.
+- **If `i2c_ok=0` or `accX/Y/Z` are all zero, stop.** The MPU6050 is not answering; the tilt veto is blind. Power-cycle and reseat the IMU wiring before driving. The BMP280 working while the MPU6050 is silent points at the MPU6050's own wires/module, not the shared bus.
+- **A WiFi drop/reboot after weak motor performance points to battery voltage sag.** Charge or swap the pack before a long run; the watchdog makes a reset safe, but the run is lost.
+- When the rover is moved, keep ≥1 m of open floor in the camera view, clear people/pets from the path, and turn the light on.
 
 ### 2026-10-20 — Session 15: the rover's WiFi failure was the phone blocking its MAC
 
