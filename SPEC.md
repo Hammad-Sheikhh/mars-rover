@@ -150,7 +150,7 @@ The camera needs only N3, N4 and N5. Its `/capture` endpoint already does what w
 
 ## 5. Setup procedure (the target)
 
-This is how setup looks today, with milestones 1–9 done. The README always shows the steps that work *today*.
+This is how setup looks today, with milestones 1–10 done. The README always shows the steps that work *today*.
 
 ### A. Any laptop, once (no hardware needed)
 
